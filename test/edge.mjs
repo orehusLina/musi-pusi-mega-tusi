@@ -258,6 +258,43 @@ check(s8.keys.length === 0, 'у прошедшего сеанса нет вар�
 check((await status(A, 'POST', '/api/round/book', { slot: '2020-05-01@12:00' })) === 400, 'забронировать прошедший сеанс нельзя');
 endRound();
 
+section('Несколько ссылок в карточке');
+const lk = await mk(A, {
+  title: 'Концерт',
+  links: [
+    { url: 'https://tickets.example/1', label: 'Купить билеты' },
+    { url: 'javascript:alert(1)', label: 'вред' },
+    { url: 'https://tickets.example/1', label: 'дубль' },
+    { url: 't.me/afisha_msk/5', label: '' },
+  ],
+});
+const lkc = (await call(A, 'GET', `/api/cards/${lk}`)).card;
+check(lkc.links.length === 2, `опасные и повторные ссылки отброшены (${lkc.links.length})`);
+check(lkc.links[0].label === 'Купить билеты' && lkc.link === 'https://tickets.example/1', 'подпись сохраняется, первая ссылка — основная');
+check(lkc.links[1].url === 'https://t.me/afisha_msk/5', 'адрес без https дополняется');
+const many = await mk(A, { title: 'Много', links: Array.from({ length: 10 }, (_, i) => ({ url: `https://e.example/${i}` })) });
+check((await call(A, 'GET', `/api/cards/${many}`)).card.links.length === 6, 'не больше 6 ссылок');
+const old = await mk(A, { title: 'Старый формат', link: 'example.org/x' });
+check((await call(A, 'GET', `/api/cards/${old}`)).card.links[0].url === 'https://example.org/x', 'старое поле link тоже принимается');
+
+const { messageLinks } = await import('/app/src/bot.js');
+L.hooks.notify = () => {};
+const caption = 'Концерт 5 декабря\nКупить билеты';
+const fwd = messageLinks({
+  caption,
+  caption_entities: [{ type: 'text_link', offset: caption.indexOf('Купить'), length: 'Купить билеты'.length, url: 'https://tickets.example/x' }],
+  forward_origin: { type: 'channel', chat: { username: 'afisha_msk' }, message_id: 42 },
+});
+check(JSON.stringify(fwd) === JSON.stringify([
+  { url: 'https://tickets.example/x', label: 'Купить билеты' },
+  { url: 'https://t.me/afisha_msk/42', label: 'Пост в Telegram' },
+]), `из пересланного поста: скрытая ссылка на билеты + ссылка на пост (${JSON.stringify(fwd)})`);
+const plain = messageLinks({ text: 'Глянь https://site.example/ev и https://t.me/c/1 ещё', entities: [{ type: 'url', offset: 6, length: 23 }] });
+check(plain.length === 2 && plain[0].url === 'https://site.example/ev', 'ссылки из текста, внешние первыми, без дублей');
+check(messageLinks({ text: 'просто текст' }).length === 0, 'без ссылок — пусто');
+const privateFwd = messageLinks({ text: 'x', forward_origin: { type: 'channel', chat: { title: 'Закрытый' }, message_id: 1 } });
+check(privateFwd.length === 0, 'у закрытого канала ссылки на пост нет — и не выдумываем');
+
 /* ------------------------------------------------------------------ */
 section('Целостность базы');
 check(get('PRAGMA integrity_check').integrity_check === 'ok', 'integrity_check = ok');

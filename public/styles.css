@@ -353,3 +353,14 @@ input[type="date"], input[type="datetime-local"] { min-height: 46px; }
 #tabs[hidden] { display: none; }
 body.notabs { padding-bottom: env(safe-area-inset-bottom); }
 body.notabs .actionbar, body.notabs .votebar { bottom: env(safe-area-inset-bottom); }
+
+/* ===================== Ссылки карточки ===================== */
+.links { display: flex; flex-wrap: wrap; gap: 8px; margin: 12px 0 2px; }
+.lchip { display: inline-flex; align-items: center; gap: 6px; padding: 8px 12px; border-radius: 10px; background: var(--surface-2); border: 1px solid var(--line); color: var(--text); font-size: 14px; font-weight: 600; max-width: 100%; }
+.lchip svg.i { width: 15px; height: 15px; color: var(--tint); }
+.lrow { display: grid; grid-template-columns: 1fr 34px; grid-template-areas: "url del" "label del"; gap: 6px 8px; padding: 10px 0; border-top: 1px solid var(--line); }
+.lrow:first-child { border-top: 0; padding-top: 0; }
+.lrow .lurl { grid-area: url; }
+.lrow .llabel { grid-area: label; font-size: 15px; padding: 9px 12px; }
+.lrow .ldel { grid-area: del; align-self: center; width: 34px; height: 34px; border-radius: 50%; display: grid; place-items: center; background: var(--surface-2); color: var(--hint); }
+.lrow .ldel svg.i { width: 16px; height: 16px; }

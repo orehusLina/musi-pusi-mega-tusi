@@ -3,7 +3,7 @@ import { cfg, DURATION_HOURS, TAGS } from './config.js';
 import { extractIdea } from './ai.js';
 import { run } from './db.js';
 import * as L from './logic.js';
-import { upsertUser, joinGroup, createDraftCard } from './api.js';
+import { upsertUser, joinGroup, createDraftCard, cleanLinks } from './api.js';
 import { linkPreview, weather, saveUpload } from './fetchers.js';
 import { slotToDate, humanDate, humanSlot, dateKey } from './time.js';
 
@@ -81,7 +81,7 @@ function icsFor(round, card) {
     `UID:round-${round.id}-${round.slot.replace(/\W/g, '')}@kuda-shodim`,
     `DTSTAMP:${utc(new Date())}`, `DTSTART:${utc(start)}`, `DTEND:${utc(end)}`,
     `SUMMARY:${e(card.title)}`,
-    `DESCRIPTION:${e([card.why, card.link].filter(Boolean).join('\n\n'))}`,
+    `DESCRIPTION:${e([card.why, ...(card.links || []).map((l) => (l.label ? `${l.label}: ${l.url}` : l.url))].filter(Boolean).join('\n\n'))}`,
     card.area ? `LOCATION:${e(card.area)}` : null,
     card.link ? `URL:${card.link}` : null,
     'BEGIN:VALARM', 'TRIGGER:-PT3H', 'ACTION:DISPLAY', 'DESCRIPTION:Скоро встреча', 'END:VALARM',
@@ -226,7 +226,29 @@ export const reminders = {
 
 /* ---------------- Сам бот ---------------- */
 
-const URL_RE = /https?:\/\/[^\s<>"]+/i;
+const isTelegramLink = (u) => /^https?:\/\/(t\.me|telegram\.me|telegram\.dog)\//i.test(u);
+
+/**
+ * Все ссылки сообщения: спрятанные под текстом («Купить билеты»), написанные адресом
+ * и ссылка на сам пересланный пост из публичного канала. Внешние — первыми.
+ */
+export function messageLinks(msg) {
+  const text = msg.text || msg.caption || '';
+  const out = [];
+  for (const e of msg.entities || msg.caption_entities || []) {
+    if (e.type === 'text_link') out.push({ url: e.url, label: text.slice(e.offset, e.offset + e.length).trim() });
+    else if (e.type === 'url') out.push({ url: text.slice(e.offset, e.offset + e.length), label: '' });
+  }
+  for (const m of text.matchAll(/https?:\/\/[^\s<>"]+/gi)) out.push({ url: m[0], label: '' });
+  const o = msg.forward_origin;
+  if (o?.type === 'channel' && o.chat?.username) {
+    out.push({ url: `https://t.me/${o.chat.username}/${o.message_id}`, label: 'Пост в Telegram' });
+  } else if (msg.forward_from_chat?.username && msg.forward_from_message_id) {
+    out.push({ url: `https://t.me/${msg.forward_from_chat.username}/${msg.forward_from_message_id}`, label: 'Пост в Telegram' });
+  }
+  const clean = cleanLinks(out);
+  return [...clean.filter((l) => !isTelegramLink(l.url)), ...clean.filter((l) => isTelegramLink(l.url))];
+}
 const BUDGET_TEXT = ['бесплатно', 'до 1000 ₽', '1000–3000 ₽', 'от 3000 ₽'];
 
 /** Что нейросеть нашла в сообщении — коротко, чтобы сразу было видно, если что-то не так. */
@@ -238,6 +260,7 @@ function draftSummary(c) {
   if (c.budget !== null && c.budget !== undefined) bits.push(`💸 ${BUDGET_TEXT[c.budget]}`);
   if (c.area) bits.push(`📍 ${c.area}`);
   if (c.needs_booking) bits.push('🎟️ нужна бронь');
+  if (c.links?.length) bits.push(`🔗 ${c.links.map((l) => l.label || new URL(l.url).hostname.replace(/^www\./, '')).join(', ')}`);
   return bits.length ? `\n${bits.map((b) => esc(b)).join('\n')}` : '';
 }
 
@@ -326,9 +349,9 @@ export async function startBot() {
         return ctx.reply(e.status === 429 ? e.message : 'Это не похоже на код приглашения. Уточни его у подруг и пришли ещё раз.');
       }
     }
-    const link = (text.match(URL_RE) || [])[0];
+    const links = messageLinks(msg);
     const hasPhoto = !!msg.photo?.length;
-    if (!link && !hasPhoto && text.length < 12) {
+    if (!links.length && !hasPhoto && text.length < 12) {
       return ctx.reply(
         'Чтобы добавить идею, пришли ссылку, перешли пост о мероприятии или просто опиши его парой строк: первая строка — название, дальше — подробности.',
         { reply_markup: keyboard('Открыть приложение') },
@@ -345,25 +368,24 @@ export async function startBot() {
         console.warn('photo download failed', e.message);
       }
     }
-    const rest = (link ? text.replace(link, '') : text).trim();
+    // Страницу для разбора берём из «внешней» ссылки (сайт, билеты); пост в Telegram — только если больше ничего нет
+    const external = links.find((l) => !isTelegramLink(l.url));
+    const pageUrl = external?.url || (!text ? links[0]?.url : '');
+    const rest = text.replace(/https?:\/\/[^\s<>"]+/gi, '').trim();
     const lines = rest.split('\n').map((x) => x.trim()).filter(Boolean);
-    let title = '';
-    let why = '';
     let page = {};
-    if (link) {
-      page = await linkPreview(link);
+    if (pageUrl) {
+      page = await linkPreview(pageUrl);
       if (page.image) photos.push(page.image);
-      title = page.title || lines[0] || '';
-      why = rest || page.description;
-    } else {
-      title = lines[0] || '';
-      why = lines.slice(1).join('\n');
     }
+    let title = lines[0] || page.title || '';
+    let why = lines.length > 1 ? lines.slice(1).join('\n') : page.description || '';
+    if (!text && page.title) { title = page.title; why = page.description; }
     // Нейросеть: дата, цена, категория, место и т.д. Если не ответила — остаётся простой разбор выше.
-    const ai = await extractIdea({ text: rest, url: link || '', page });
+    const ai = await extractIdea({ text: rest, url: pageUrl || '', page });
     const card = ai
-      ? { ...ai, title: ai.title || title, why: ai.why || why, link: link || '', photos, budget: ai.budget ?? 1, duration: ai.duration || 'short' }
-      : { title, why, link: link || '', photos };
+      ? { ...ai, title: ai.title || title, why: ai.why || why, links, photos, budget: ai.budget ?? 1, duration: ai.duration || 'short' }
+      : { title, why, links, photos };
     const id = createDraftCard(ctx.from.id, card);
     await ctx.api.editMessageText(
       ctx.chat.id,

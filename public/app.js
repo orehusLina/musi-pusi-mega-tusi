@@ -150,10 +150,28 @@ function ask(msg) {
   });
 }
 
+const isTgLink = (u) => /^https?:\/\/(t\.me|telegram\.me)\//i.test(u);
 function openLink(url) {
-  if (tg?.openLink) tg.openLink(url);
+  if (isTgLink(url) && tg?.openTelegramLink) tg.openTelegramLink(url);
+  else if (tg?.openLink) tg.openLink(url);
   else window.open(url, '_blank', 'noopener');
 }
+const linkLabel = (l) => {
+  if (l.label) return l.label;
+  if (isTgLink(l.url)) return 'Пост в Telegram';
+  try {
+    return new URL(l.url).hostname.replace(/^www\./, '');
+  } catch {
+    return 'Ссылка';
+  }
+};
+const linksOf = (c) => (c.links?.length ? c.links : c.link ? [{ url: c.link, label: '' }] : []);
+const linksHtml = (c) => {
+  const ls = linksOf(c);
+  return ls.length
+    ? `<div class="links">${ls.map((l) => `<button class="lchip" data-act="open" data-url="${esc(l.url)}">${esc(linkLabel(l))}${icon('external')}</button>`).join('')}</div>`
+    : '';
+};
 
 function view(html, handlers = {}) {
   app.innerHTML = html;
@@ -273,8 +291,8 @@ function cardFull(c, { interactive = false, badges = '', clamp = false } = {}) {
       <div>${tagsHtml(c.tags)}</div>
       ${facts(c)}
       ${c.why ? `<p class="why ${clamp ? 'clamp' : ''}">${esc(c.why)}</p>` : ''}
-      <div class="foot">${ava(c.author)}<span>Предложила ${esc(c.author?.name)}</span>
-        ${c.link ? `<button class="linkbtn" data-act="open" data-url="${esc(c.link)}">Ссылка ${icon('external')}</button>` : ''}</div>
+      ${linksHtml(c)}
+      <div class="foot">${ava(c.author)}<span>Предложила ${esc(c.author?.name)}</span></div>
     </div>
   </div>`;
 }
@@ -863,12 +881,23 @@ async function renderEditor(id, draft = null) {
   const c = draft || (id
     ? (await api(`/api/cards/${id}`)).card
     : { title: '', why: '', link: '', photo: '', tags: [], budget: 1, duration: 'short', time_of_day: [], area: '', outdoor: false, needs_booking: false, available_until: null, fixed_at: null, status: 'new' });
-  const f = { ...c, tags: new Set(c.tags), time_of_day: new Set(c.time_of_day), photos: [...photosOf(c)] };
+  const f = { ...c, tags: new Set(c.tags), time_of_day: new Set(c.time_of_day), photos: [...photosOf(c)], links: linksOf(c).map((l) => ({ ...l })) };
+  if (!f.links.length) f.links.push({ url: '', label: '' });
+  // Текущие значения полей ссылок из формы
+  const readLinks = () =>
+    [...document.querySelectorAll('#links .lrow')].map((r) => ({ label: r.querySelector('.llabel').value.trim(), url: r.querySelector('.lurl').value.trim() }));
+  const linksRows = () =>
+    f.links.map((l, i) => `<div class="lrow">
+        <input class="lurl" type="url" inputmode="url" placeholder="https://…" value="${esc(l.url)}">
+        <input class="llabel" maxlength="40" placeholder="${i === 0 ? 'Например, «Билеты»' : 'Подпись'}" value="${esc(l.label)}">
+        ${f.links.length > 1 || l.url ? `<button class="ldel" data-act="ldel" data-i="${i}" aria-label="Убрать ссылку">${icon('x')}</button>` : ''}
+      </div>`).join('');
+  const drawLinks = () => (document.getElementById('links').innerHTML = linksRows());
   const touched = new Set(c._touched || []); // что человек выбрал сам — нейросеть это не перезаписывает
   const collect = () => {
     const v = (k) => document.getElementById(k).value;
     return {
-      ...c, title: v('title'), why: v('why'), link: v('link'), area: v('area'), photos: f.photos, photo: f.photos[0] || '',
+      ...c, title: v('title'), why: v('why'), links: readLinks().filter((l) => l.url), area: v('area'), photos: f.photos, photo: f.photos[0] || '',
       tags: [...f.tags], time_of_day: [...f.time_of_day], budget: f.budget, duration: f.duration,
       outdoor: document.getElementById('outdoor').checked, needs_booking: document.getElementById('needs_booking').checked,
       available_until: v('available_until') || null, fixed_at: v('fixed_at') || null, _touched: [...touched],
@@ -905,8 +934,13 @@ async function renderEditor(id, draft = null) {
     <p class="sub">${c.status === 'draft' ? 'Бот заполнил то, что нашёл. Проверь и поправь, если что-то не так.' : 'Обязательно только название — остальное по желанию.'}</p>
 
     <div class="panel">
-      <label class="field"><span class="lbl">Ссылка</span><div class="row"><input id="link" class="grow" type="url" inputmode="url" placeholder="https://…" value="${esc(f.link)}"><button class="btn small secondary" data-act="preview">Заполнить</button></div>
-        <span class="help">${ME.ai ? 'Вставь ссылку или напиши описание ниже и нажми «Заполнить» — нейросеть разложит дату, цену, категорию и место.' : 'Вставь ссылку и нажми «Заполнить» — название и картинка подтянутся.'}</span></label>
+      <div class="field"><span class="lbl">Ссылки</span><div id="links">${linksRows()}</div>
+        <div class="row" style="margin-top:8px">
+          ${f.links.length < 6 ? `<button class="btn small secondary" data-act="ladd">${icon('plus')}Ещё ссылка</button>` : ''}
+          <span class="grow"></span>
+          <button class="btn small" data-act="preview">Заполнить</button>
+        </div>
+        <span class="help">${ME.ai ? 'Вставь ссылку или напиши описание ниже и нажми «Заполнить» — нейросеть разложит дату, цену, категорию и место. Ссылок может быть несколько: сайт, билеты, пост.' : 'Вставь ссылку и нажми «Заполнить» — название и картинка подтянутся.'}</span></div>
       <label class="field"><span class="lbl">Название</span><input id="title" maxlength="140" placeholder="Например, иммерсивный спектакль" value="${esc(f.title)}"></label>
       <label class="field"><span class="lbl">Почему стоит сходить</span><textarea id="why" maxlength="1500" placeholder="Пара слов: что там интересного">${esc(f.why)}</textarea></label>
       <div class="field"><span class="lbl">Фото</span><div class="pstrip" id="pstrip"></div><span class="help">До ${MAX_PHOTOS} фото. Первое — обложка. Нажми на фото, чтобы посмотреть.</span></div>
@@ -941,12 +975,15 @@ async function renderEditor(id, draft = null) {
         el.parentElement.querySelectorAll('.chip').forEach((b) => b.classList.toggle('on', b === el));
         haptic();
       },
+      ladd: () => { f.links = [...readLinks(), { url: '', label: '' }]; drawLinks(); document.querySelectorAll('#links .lurl')[f.links.length - 1]?.focus(); },
+      ldel: (el) => { f.links = readLinks(); f.links.splice(Number(el.dataset.i), 1); if (!f.links.length) f.links.push({ url: '', label: '' }); drawLinks(); },
       pdel: (el) => { f.photos.splice(Number(el.dataset.i), 1); drawStrip(); haptic(); },
       pcover: (el) => { const [p] = f.photos.splice(Number(el.dataset.i), 1); f.photos.unshift(p); drawStrip(); haptic(); },
       tag: (el) => { const k = el.dataset.k; f.tags.has(k) ? f.tags.delete(k) : f.tags.add(k); el.classList.toggle('on'); haptic(); },
       tod: (el) => { const k = el.dataset.k; f.time_of_day.has(k) ? f.time_of_day.delete(k) : f.time_of_day.add(k); el.classList.toggle('on'); haptic(); },
       preview: (el) => {
-        let url = document.getElementById('link').value.trim();
+        const firstExternal = readLinks().find((l) => l.url && !isTgLink(l.url)) || readLinks().find((l) => l.url);
+        let url = firstExternal?.url || '';
         const text = document.getElementById('why').value.trim();
         if (url && !/^https?:/i.test(url)) url = `https://${url}`;
         if (!url && !(ME.ai && text)) return toast(ME.ai ? 'Вставь ссылку или напиши описание' : 'Сначала вставь ссылку');

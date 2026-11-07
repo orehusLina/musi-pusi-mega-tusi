@@ -123,7 +123,10 @@ CREATE TABLE IF NOT EXISTS settings (
 `);
 
 // Миграции для уже существующих баз
-for (const sql of ["ALTER TABLE cards ADD COLUMN photos TEXT NOT NULL DEFAULT '[]'"]) {
+for (const sql of [
+  "ALTER TABLE cards ADD COLUMN photos TEXT NOT NULL DEFAULT '[]'",
+  "ALTER TABLE cards ADD COLUMN links TEXT NOT NULL DEFAULT '[]'",
+]) {
   try {
     db.exec(sql);
   } catch {
@@ -131,6 +134,7 @@ for (const sql of ["ALTER TABLE cards ADD COLUMN photos TEXT NOT NULL DEFAULT '[
   }
 }
 db.exec("UPDATE cards SET photos=json_array(photo) WHERE photos='[]' AND photo<>''");
+db.exec("UPDATE cards SET links=json_array(json_object('url',link,'label','')) WHERE links='[]' AND link<>''");
 
 const cache = new Map();
 const st = (sql) => {
