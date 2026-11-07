@@ -1,5 +1,6 @@
 import { Bot, InputFile } from 'grammy';
-import { cfg, DURATION_HOURS } from './config.js';
+import { cfg, DURATION_HOURS, TAGS } from './config.js';
+import { extractIdea } from './ai.js';
 import { run } from './db.js';
 import * as L from './logic.js';
 import { upsertUser, joinGroup, createDraftCard } from './api.js';
@@ -226,6 +227,19 @@ export const reminders = {
 /* ---------------- Сам бот ---------------- */
 
 const URL_RE = /https?:\/\/[^\s<>"]+/i;
+const BUDGET_TEXT = ['бесплатно', 'до 1000 ₽', '1000–3000 ₽', 'от 3000 ₽'];
+
+/** Что нейросеть нашла в сообщении — коротко, чтобы сразу было видно, если что-то не так. */
+function draftSummary(c) {
+  const bits = [];
+  if (c.tags?.length) bits.push(c.tags.map((t) => TAGS[t]).join(', '));
+  if (c.fixed_at) bits.push(`📅 ${humanSlot(c.fixed_at.replace('T', '@'))}`);
+  else if (c.available_until) bits.push(`📅 до ${humanDate(new Date(`${c.available_until}T12:00`))}`);
+  if (c.budget !== null && c.budget !== undefined) bits.push(`💸 ${BUDGET_TEXT[c.budget]}`);
+  if (c.area) bits.push(`📍 ${c.area}`);
+  if (c.needs_booking) bits.push('🎟️ нужна бронь');
+  return bits.length ? `\n${bits.map((b) => esc(b)).join('\n')}` : '';
+}
 
 export async function startBot() {
   setInterval(refreshTunnelUrl, 30_000);
@@ -335,20 +349,27 @@ export async function startBot() {
     const lines = rest.split('\n').map((x) => x.trim()).filter(Boolean);
     let title = '';
     let why = '';
+    let page = {};
     if (link) {
-      const prev = await linkPreview(link);
-      if (prev.image) photos.push(prev.image);
-      title = prev.title || lines[0] || '';
-      why = rest || prev.description;
+      page = await linkPreview(link);
+      if (page.image) photos.push(page.image);
+      title = page.title || lines[0] || '';
+      why = rest || page.description;
     } else {
       title = lines[0] || '';
       why = lines.slice(1).join('\n');
     }
-    const id = createDraftCard(ctx.from.id, { title, why, link: link || '', photos });
+    // Нейросеть: дата, цена, категория, место и т.д. Если не ответила — остаётся простой разбор выше.
+    const ai = await extractIdea({ text: rest, url: link || '', page });
+    const card = ai
+      ? { ...ai, title: ai.title || title, why: ai.why || why, link: link || '', photos, budget: ai.budget ?? 1, duration: ai.duration || 'short' }
+      : { title, why, link: link || '', photos };
+    const id = createDraftCard(ctx.from.id, card);
     await ctx.api.editMessageText(
       ctx.chat.id,
       wait.message_id,
-      `Черновик готов: <b>${esc(title || 'без названия')}</b>\n\nПроверь название, добавь категорию и детали — после этого идея попадёт в общий список.`,
+      `Черновик готов: <b>${esc(card.title || 'без названия')}</b>${ai ? draftSummary({ ...card, budget: ai.budget }) : ''}\n\n` +
+        (ai ? 'Проверь, всё ли верно, и добавь в идеи.' : 'Проверь название, добавь категорию и детали — после этого идея попадёт в общий список.'),
       { parse_mode: 'HTML', reply_markup: keyboard('Дооформить карточку', `card/${id}/edit`) },
     );
   });

@@ -859,11 +859,21 @@ async function uploadImage(file, url = '/api/upload') {
   return api(url, { method: 'POST', form: fd });
 }
 
-async function renderEditor(id) {
-  const c = id
+async function renderEditor(id, draft = null) {
+  const c = draft || (id
     ? (await api(`/api/cards/${id}`)).card
-    : { title: '', why: '', link: '', photo: '', tags: [], budget: 1, duration: 'short', time_of_day: [], area: '', outdoor: false, needs_booking: false, available_until: null, fixed_at: null, status: 'new' };
+    : { title: '', why: '', link: '', photo: '', tags: [], budget: 1, duration: 'short', time_of_day: [], area: '', outdoor: false, needs_booking: false, available_until: null, fixed_at: null, status: 'new' });
   const f = { ...c, tags: new Set(c.tags), time_of_day: new Set(c.time_of_day), photos: [...photosOf(c)] };
+  const touched = new Set(c._touched || []); // что человек выбрал сам — нейросеть это не перезаписывает
+  const collect = () => {
+    const v = (k) => document.getElementById(k).value;
+    return {
+      ...c, title: v('title'), why: v('why'), link: v('link'), area: v('area'), photos: f.photos, photo: f.photos[0] || '',
+      tags: [...f.tags], time_of_day: [...f.time_of_day], budget: f.budget, duration: f.duration,
+      outdoor: document.getElementById('outdoor').checked, needs_booking: document.getElementById('needs_booking').checked,
+      available_until: v('available_until') || null, fixed_at: v('fixed_at') || null, _touched: [...touched],
+    };
+  };
   const isMine = !id || c.author_id === ME.user.id;
   const MAX_PHOTOS = 10;
   const stripHtml = () =>
@@ -892,11 +902,11 @@ async function renderEditor(id) {
 
   view(
     `${top(c.status === 'draft' ? 'Допиши карточку' : id ? 'Изменить идею' : 'Новая идея')}
-    <p class="sub">${c.status === 'draft' ? 'Бот заполнил то, что нашёл по ссылке. Проверь и добавь детали.' : 'Обязательно только название — остальное по желанию.'}</p>
+    <p class="sub">${c.status === 'draft' ? 'Бот заполнил то, что нашёл. Проверь и поправь, если что-то не так.' : 'Обязательно только название — остальное по желанию.'}</p>
 
     <div class="panel">
       <label class="field"><span class="lbl">Ссылка</span><div class="row"><input id="link" class="grow" type="url" inputmode="url" placeholder="https://…" value="${esc(f.link)}"><button class="btn small secondary" data-act="preview">Заполнить</button></div>
-        <span class="help">Вставь ссылку и нажми «Заполнить» — название и картинка подтянутся.</span></label>
+        <span class="help">${ME.ai ? 'Вставь ссылку или напиши описание ниже и нажми «Заполнить» — нейросеть разложит дату, цену, категорию и место.' : 'Вставь ссылку и нажми «Заполнить» — название и картинка подтянутся.'}</span></label>
       <label class="field"><span class="lbl">Название</span><input id="title" maxlength="140" placeholder="Например, иммерсивный спектакль" value="${esc(f.title)}"></label>
       <label class="field"><span class="lbl">Почему стоит сходить</span><textarea id="why" maxlength="1500" placeholder="Пара слов: что там интересного">${esc(f.why)}</textarea></label>
       <div class="field"><span class="lbl">Фото</span><div class="pstrip" id="pstrip"></div><span class="help">До ${MAX_PHOTOS} фото. Первое — обложка. Нажми на фото, чтобы посмотреть.</span></div>
@@ -927,6 +937,7 @@ async function renderEditor(id) {
     {
       one: (el) => {
         f[el.dataset.name] = el.dataset.name === 'budget' ? Number(el.dataset.v) : el.dataset.v;
+        touched.add(el.dataset.name);
         el.parentElement.querySelectorAll('.chip').forEach((b) => b.classList.toggle('on', b === el));
         haptic();
       },
@@ -935,35 +946,43 @@ async function renderEditor(id) {
       tag: (el) => { const k = el.dataset.k; f.tags.has(k) ? f.tags.delete(k) : f.tags.add(k); el.classList.toggle('on'); haptic(); },
       tod: (el) => { const k = el.dataset.k; f.time_of_day.has(k) ? f.time_of_day.delete(k) : f.time_of_day.add(k); el.classList.toggle('on'); haptic(); },
       preview: (el) => {
-        const url = document.getElementById('link').value.trim();
-        if (!url) return toast('Сначала вставь ссылку');
+        let url = document.getElementById('link').value.trim();
+        const text = document.getElementById('why').value.trim();
+        if (url && !/^https?:/i.test(url)) url = `https://${url}`;
+        if (!url && !(ME.ai && text)) return toast(ME.ai ? 'Вставь ссылку или напиши описание' : 'Сначала вставь ссылку');
         el.disabled = true;
         el.textContent = '…';
         act(async () => {
-          const p = await api('/api/preview', { method: 'POST', body: { url: /^https?:/i.test(url) ? url : `https://${url}` } });
-          const t = document.getElementById('title');
-          const w = document.getElementById('why');
-          if (p.title && !t.value) t.value = p.title;
-          if (p.description && !w.value) w.value = p.description;
-          if (p.image && f.photos.length < MAX_PHOTOS) {
-            f.photos.push(p.image);
-            drawStrip();
+          const p = await api('/api/preview', { method: 'POST', body: { url, text: ME.ai ? text : '' } });
+          const d = collect();
+          const ai = p.ai || {};
+          const got = [];
+          if (!d.title.trim() && (ai.title || p.title)) { d.title = ai.title || p.title; got.push('название'); }
+          if (!d.why.trim() && (ai.why || p.description)) { d.why = ai.why || p.description; got.push('описание'); }
+          if (p.image && d.photos.length < MAX_PHOTOS && !d.photos.includes(p.image)) { d.photos = [...d.photos, p.image]; got.push('фото'); }
+          if (p.ai) {
+            if (!d.tags.length && ai.tags.length) { d.tags = ai.tags; got.push('категорию'); }
+            if (!touched.has('budget') && ai.budget !== null) { d.budget = ai.budget; got.push('цену'); }
+            if (!touched.has('duration') && ai.duration) d.duration = ai.duration;
+            if (!d.time_of_day.length && ai.time_of_day.length) d.time_of_day = ai.time_of_day;
+            if (!d.area.trim() && ai.area) { d.area = ai.area; got.push('место'); }
+            if (!d.fixed_at && ai.fixed_at) { d.fixed_at = ai.fixed_at; got.push('дату'); }
+            if (!d.available_until && ai.available_until && !d.fixed_at) { d.available_until = ai.available_until; got.push('срок'); }
+            d.outdoor = d.outdoor || ai.outdoor;
+            d.needs_booking = d.needs_booking || ai.needs_booking;
           }
-          toast(p.title || p.image ? 'Заполнено по ссылке' : 'Сайт не отдал данные — заполни вручную');
+          const y = window.scrollY;
+          await renderEditor(id, d);
+          window.scrollTo(0, y);
+          toast(got.length ? `Заполнила: ${got.join(', ')}` : 'Ничего нового не нашлось — заполни вручную');
         }).finally(() => { el.disabled = false; el.textContent = 'Заполнить'; });
       },
       save: () => act(async () => {
-        const v = (k) => document.getElementById(k).value;
-        if (!v('title').trim()) {
+        const body = collect();
+        if (!body.title.trim()) {
           document.getElementById('title').focus();
           throw new Error('Добавь название');
         }
-        const body = {
-          title: v('title'), why: v('why'), link: v('link'), area: v('area'), photos: f.photos,
-          tags: [...f.tags], time_of_day: [...f.time_of_day], budget: f.budget, duration: f.duration,
-          outdoor: document.getElementById('outdoor').checked, needs_booking: document.getElementById('needs_booking').checked,
-          available_until: v('available_until') || null, fixed_at: v('fixed_at') || null,
-        };
         const res = id ? await api(`/api/cards/${id}`, { method: 'PUT', body }) : await api('/api/cards', { method: 'POST', body });
         success();
         toast('Сохранено');

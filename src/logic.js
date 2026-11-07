@@ -1,5 +1,5 @@
 import { all, get, run, tx, getSetting } from './db.js';
-import { cfg, BLOCKS, MOODS } from './config.js';
+import { cfg, BLOCKS, MOODS, MOOD_TAGS } from './config.js';
 import { DAY, HOUR, pad, dateKey, monthKey, parseDateKey, slotToDate, daysBetween, humanSlot } from './time.js';
 
 /* ------------------------------------------------------------------ */
@@ -64,7 +64,8 @@ export function availableCards(now = new Date()) {
   ).map(parseCard);
 }
 
-const cardMatchesMood = (c, mood) => (mood === 'cheap' ? c.budget <= 1 : c.tags.includes(mood));
+const cardMatchesMood = (c, mood) =>
+  mood === 'cheap' ? c.budget <= 1 : (MOOD_TAGS[mood] || [mood]).some((t) => c.tags.includes(t));
 
 /* ------------------------------------------------------------------ */
 /* Раунды */

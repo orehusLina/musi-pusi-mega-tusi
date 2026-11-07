@@ -69,7 +69,8 @@ const decode = (s) =>
     .replace(/&#(\d+);/g, (_, n) => String.fromCodePoint(Number(n))).replace(/&nbsp;/g, ' ').trim();
 
 export async function linkPreview(rawUrl) {
-  const out = { title: '', description: '', image: '' };
+  // text и ld — только для разбора нейросетью, клиенту не отдаются
+  const out = { title: '', description: '', image: '', text: '', ld: '' };
   try {
     const { res, url } = await safeFetch(rawUrl, 'text/html,application/xhtml+xml');
     if (!res.ok) return out;
@@ -84,6 +85,13 @@ export async function linkPreview(rawUrl) {
     const titleTag = (html.match(/<title[^>]*>([^<]*)<\/title>/i) || [])[1];
     out.title = meta['og:title'] || meta['twitter:title'] || (titleTag ? decode(titleTag) : '');
     out.description = meta['og:description'] || meta['description'] || meta['twitter:description'] || '';
+    out.ld = [...html.matchAll(/<script[^>]+application\/ld\+json[^>]*>([\s\S]*?)<\/script>/gi)]
+      .map((m) => m[1].trim()).join('\n').slice(0, 4000);
+    out.text = decode(
+      html.replace(/<(script|style|noscript|svg|template)[\s\S]*?<\/\1>/gi, ' ')
+        .replace(/<br\s*\/?>|<\/(p|div|li|h\d|tr)>/gi, '\n')
+        .replace(/<[^>]+>/g, ' '),
+    ).replace(/[ \t ]+/g, ' ').replace(/\s*\n\s*/g, '\n').trim().slice(0, 6000);
     const img = meta['og:image'] || meta['og:image:url'] || meta['twitter:image'];
     if (img) {
       try {

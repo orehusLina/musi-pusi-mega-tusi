@@ -3,6 +3,7 @@ import { cfg, TAGS, MOODS, BLOCKS } from './config.js';
 import { all, get, run, setSetting } from './db.js';
 import * as L from './logic.js';
 import { linkPreview, saveUpload, weather } from './fetchers.js';
+import { extractIdea, aiEnabled } from './ai.js';
 
 const { UserError } = L;
 
@@ -93,13 +94,15 @@ function cleanCard(b) {
   return c;
 }
 
+/** Черновик из бота: все поля проходят ту же проверку, что и при сохранении из приложения. */
 export function createDraftCard(userId, data) {
   const now = Date.now();
-  const photos = (data.photos || (data.photo ? [data.photo] : [])).filter((x) => UPLOAD_RE.test(x)).slice(0, 10);
+  const c = cleanCard({ ...data, title: str(data.title, 140) || 'Новая идея' });
   const info = run(
-    `INSERT INTO cards(author_id,status,title,why,link,photo,photos,created_at,updated_at) VALUES(?,?,?,?,?,?,?,?,?)`,
-    userId, 'draft', str(data.title, 140), str(data.why, 1500), str(data.link, 500).replace(/\s+/g, ''), photos[0] || '',
-    JSON.stringify(photos), now, now,
+    `INSERT INTO cards(author_id,status,title,why,link,photo,photos,tags,budget,duration,time_of_day,area,outdoor,needs_booking,available_until,fixed_at,created_at,updated_at)
+     VALUES(?, 'draft', ?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+    userId, c.title, c.why, c.link, c.photo, c.photos, c.tags, c.budget, c.duration, c.time_of_day, c.area, c.outdoor, c.needs_booking,
+    c.available_until, c.fixed_at, now, now,
   );
   return Number(info.lastInsertRowid);
 }
@@ -146,6 +149,7 @@ export async function registerApi(app) {
     user: L.pubUser(req.user),
     member: !!req.user.is_member,
     needCode: !!cfg.inviteCode,
+    ai: aiEnabled(),
     dict: { tags: TAGS, moods: MOODS, blocks: BLOCKS },
   }));
   app.post('/api/join', async (req) => ({ user: L.pubUser(joinGroup(uid(req), req.body?.code)) }));
@@ -261,10 +265,15 @@ export async function registerApi(app) {
     return { ok: true };
   });
 
+  // Заполнить карточку по ссылке и/или тексту описания (нейросеть, если подключена)
   app.post('/api/preview', async (req) => {
     const url = str(req.body?.url, 500);
-    if (!/^https?:\/\//i.test(url)) throw new UserError('Это не похоже на ссылку');
-    return linkPreview(url);
+    const text = str(req.body?.text, 4000);
+    if (url && !/^https?:\/\//i.test(url)) throw new UserError('Это не похоже на ссылку');
+    if (!url && !text) throw new UserError('Вставь ссылку или описание');
+    const page = url ? await linkPreview(url) : {};
+    const ai = await extractIdea({ url, text, page });
+    return { title: page.title || '', description: page.description || '', image: page.image || '', ai };
   });
 
   app.post('/api/upload', async (req) => {

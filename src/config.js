@@ -17,20 +17,59 @@ export const cfg = {
   likesTarget: num(process.env.LIKES_TARGET, 3),
   // После скольких карточек раунд для человека считается пройденным
   maxShown: num(process.env.MAX_SHOWN, 10),
+  // Необязательно: Gemini разбирает текст/страницу и заполняет поля карточки
+  geminiKey: process.env.GEMINI_API_KEY || '',
+  geminiModel: process.env.GEMINI_MODEL || 'gemini-3.5-flash-lite',
+  geminiFallback: process.env.GEMINI_FALLBACK_MODEL || 'gemini-2.5-flash-lite',
 };
 
+// Категории карточек. Ключи не переименовывать — они хранятся в базе.
 export const TAGS = {
-  culture: 'Культура',
-  active: 'Активное',
-  relax: 'Отдых',
+  culture: 'Выставки и музеи',
+  theatre: 'Театр',
+  music: 'Концерты',
+  cinema: 'Кино',
+  learn: 'Лекции и воркшопы',
+  conference: 'Конференции и митапы',
+  hackathon: 'Хакатоны',
+  party: 'Вечеринки',
   food: 'Еда',
-  party: 'Вечеринка',
-  nature: 'Природа',
+  market: 'Маркеты и шопинг',
+  active: 'Спорт и движение',
+  games: 'Игры и квесты',
+  nature: 'Природа и прогулки',
+  trip: 'За город',
+  relax: 'Отдых',
+  beauty: 'Красота и спа',
   creative: 'Творчество',
   new: 'Новый опыт',
 };
 
-export const MOODS = { cheap: 'Бюджетно', ...TAGS };
+// Настроения недели — крупнее категорий: каждое подходит к нескольким категориям
+export const MOODS = {
+  cheap: 'Бюджетно',
+  culture: 'Культурно',
+  active: 'Подвигаться',
+  relax: 'Отдохнуть',
+  food: 'Вкусно поесть',
+  party: 'Потусить',
+  nature: 'На воздухе',
+  creative: 'Сделать что-то руками',
+  grow: 'Прокачаться',
+  new: 'Что-то новое',
+};
+
+export const MOOD_TAGS = {
+  culture: ['culture', 'theatre', 'music', 'cinema', 'learn'],
+  active: ['active', 'games', 'trip'],
+  relax: ['relax', 'beauty', 'nature'],
+  food: ['food', 'market'],
+  party: ['party', 'music', 'games'],
+  nature: ['nature', 'trip'],
+  creative: ['creative', 'learn'],
+  grow: ['learn', 'conference', 'hackathon'],
+  new: ['new', 'games', 'hackathon'],
+};
 
 export const BLOCKS = [
   { h: '10', key: 'morning', label: 'утро', range: '10–13' },
