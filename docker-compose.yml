@@ -1,0 +1,25 @@
+name: kuda-shodim
+
+services:
+  app:
+    build: .
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      TZ: ${TZ:-Europe/Moscow}
+      DATA_DIR: /data
+      # Если PUBLIC_URL пуст, адрес берётся из быстрого туннеля Cloudflare ниже
+      TUNNEL_METRICS_URL: http://tunnel:2000/quicktunnel
+    volumes:
+      - ./data:/data
+    # Только для доступа с самого сервера; снаружи — через https-туннель
+    ports:
+      - "127.0.0.1:3100:3000"
+
+  # Бесплатный https-адрес без домена и аккаунта (*.trycloudflare.com).
+  # При перезапуске адрес меняется — бот сам обновит кнопку «Открыть».
+  tunnel:
+    image: cloudflare/cloudflared:2024.12.2
+    command: ["tunnel", "--no-autoupdate", "--metrics", "0.0.0.0:2000", "--url", "http://app:3000"]
+    restart: unless-stopped
+    depends_on: [app]
