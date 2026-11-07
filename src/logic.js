@@ -406,6 +406,8 @@ export function slotOptions(round) {
   if (card.fixed_at) {
     const [d, t] = card.fixed_at.split('T');
     const key = `${d}@${t}`;
+    // Сеанс уже прошёл — забронировать нельзя, остаётся перевыбрать
+    if (slotToDate(key).getTime() <= Date.now()) return { days: [], blocks: [], fixed: null, keys: [] };
     return { days: [d], blocks: [], fixed: key, keys: [key] };
   }
   const now = new Date();

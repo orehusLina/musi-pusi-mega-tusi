@@ -3,7 +3,11 @@ import net from 'node:net';
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import crypto from 'node:crypto';
+import sharp from 'sharp';
 import { cfg } from './config.js';
+
+sharp.cache(false);
+sharp.concurrency(1); // сервер маленький — не даём сжатию съесть весь процессор
 
 /* ---------------- Безопасная загрузка чужих страниц (превью ссылок) ---------------- */
 
@@ -98,11 +102,20 @@ export async function linkPreview(rawUrl) {
 
 const EXT = { 'image/jpeg': 'jpg', 'image/png': 'png', 'image/webp': 'webp', 'image/gif': 'gif' };
 
+/**
+ * Любую картинку (загрузку с телефона или картинку по ссылке) приводим к одному виду:
+ * поворот по EXIF, не больше 1600 px по длинной стороне, WebP ~q78, без метаданных.
+ * Обычно получается 60–200 КБ вместо мегабайтов.
+ */
 export async function saveUpload(buf, mime) {
-  const ext = EXT[mime];
-  if (!ext) throw new Error('unsupported image type');
-  const name = `${crypto.randomBytes(12).toString('hex')}.${ext}`;
-  await fs.writeFile(path.join(cfg.dataDir, 'uploads', name), buf);
+  if (!EXT[mime] && mime !== 'image/avif') throw new Error('unsupported image type');
+  const out = await sharp(buf, { limitInputPixels: 50_000_000, failOn: 'error' })
+    .rotate()
+    .resize({ width: 1600, height: 1600, fit: 'inside', withoutEnlargement: true })
+    .webp({ quality: 78, effort: 4 })
+    .toBuffer();
+  const name = `${crypto.randomBytes(12).toString('hex')}.webp`;
+  await fs.writeFile(path.join(cfg.dataDir, 'uploads', name), out);
   return `/uploads/${name}`;
 }
 
@@ -110,7 +123,29 @@ async function downloadImage(url) {
   const { res } = await safeFetch(url, 'image/*');
   const mime = (res.headers.get('content-type') || '').split(';')[0].trim();
   if (!res.ok || !EXT[mime]) throw new Error('not an image');
-  return saveUpload(await readLimited(res, 6_000_000), mime);
+  return saveUpload(await readLimited(res, 12_000_000), mime);
+}
+
+/**
+ * Удаляет из uploads файлы, на которые больше ничего не ссылается
+ * (фото, убранные из карточек, удалённые черновики). Свежие файлы (<2 суток) не трогаем:
+ * их могли только что загрузить в ещё не сохранённую карточку.
+ */
+export async function cleanupUploads(referenced) {
+  const dir = path.join(cfg.dataDir, 'uploads');
+  const keep = new Set([...referenced].map((p) => path.basename(p)));
+  let removed = 0;
+  let freed = 0;
+  for (const name of await fs.readdir(dir)) {
+    if (keep.has(name)) continue;
+    const file = path.join(dir, name);
+    const st = await fs.stat(file);
+    if (Date.now() - st.mtimeMs < 2 * 86400e3) continue;
+    await fs.unlink(file);
+    removed++;
+    freed += st.size;
+  }
+  return { removed, freed };
 }
 
 /* ---------------- Погода (Open-Meteo, без ключа) ---------------- */

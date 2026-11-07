@@ -35,10 +35,26 @@ export function upsertUser(tg) {
   return L.userById(tg.id);
 }
 
+// Защита кода приглашения от перебора: 5 неудачных попыток за 15 минут на человека
+const joinFails = new Map();
+const JOIN_LIMIT = 5;
+const JOIN_WINDOW = 15 * 60e3;
+
 export function joinGroup(userId, code) {
+  const u0 = L.userById(userId);
+  if (u0?.is_member) return u0;
+  const now = Date.now();
+  const f = joinFails.get(userId);
+  if (f && now - f.since < JOIN_WINDOW && f.count >= JOIN_LIMIT) {
+    throw new UserError('Слишком много попыток. Попробуй через 15 минут.', 429);
+  }
   if (cfg.inviteCode && String(code || '').trim().toLowerCase() !== cfg.inviteCode.toLowerCase()) {
+    const cur = f && now - f.since < JOIN_WINDOW ? f : { since: now, count: 0 };
+    cur.count++;
+    joinFails.set(userId, cur);
     throw new UserError('Неверный код приглашения', 403);
   }
+  joinFails.delete(userId);
   const u = L.userById(userId);
   if (!u.is_member) run('UPDATE users SET is_member=1, joined_at=? WHERE id=?', Date.now(), userId);
   const round = L.currentRound();
@@ -68,6 +84,8 @@ function cleanCard(b) {
     available_until: dateOrNull(b.available_until),
     fixed_at: /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/.test(b.fixed_at || '') ? b.fixed_at : null,
   };
+  c.link = c.link.replace(/\s+/g, '');
+  if (/^[a-z][a-z0-9+.-]*:(?!\d)/i.test(c.link) && !/^https?:\/\//i.test(c.link)) c.link = ''; // javascript:, data:, file: …
   if (c.link && !/^https?:\/\//i.test(c.link)) c.link = `https://${c.link}`;
   c.photo = c.photos[0] || '';
   c.photos = JSON.stringify(c.photos);
@@ -77,10 +95,11 @@ function cleanCard(b) {
 
 export function createDraftCard(userId, data) {
   const now = Date.now();
+  const photos = (data.photos || (data.photo ? [data.photo] : [])).filter((x) => UPLOAD_RE.test(x)).slice(0, 10);
   const info = run(
     `INSERT INTO cards(author_id,status,title,why,link,photo,photos,created_at,updated_at) VALUES(?,?,?,?,?,?,?,?,?)`,
-    userId, 'draft', str(data.title, 140), str(data.why, 1500), str(data.link, 500), data.photo || '',
-    JSON.stringify(data.photo ? [data.photo] : []), now, now,
+    userId, 'draft', str(data.title, 140), str(data.why, 1500), str(data.link, 500).replace(/\s+/g, ''), photos[0] || '',
+    JSON.stringify(photos), now, now,
   );
   return Number(info.lastInsertRowid);
 }
@@ -92,6 +111,13 @@ export async function registerApi(app) {
     const status = err.status || err.statusCode || 500;
     if (status >= 500) req.log.error(err);
     reply.code(status).send({ error: status >= 500 ? 'Что-то сломалось, попробуй ещё раз' : err.message });
+  });
+
+  app.addHook('onSend', async (req, reply, payload) => {
+    reply.header('X-Content-Type-Options', 'nosniff');
+    reply.header('Referrer-Policy', 'no-referrer');
+    if (req.url.startsWith('/api/')) reply.header('Cache-Control', 'no-store');
+    return payload;
   });
 
   app.addHook('preHandler', async (req) => {

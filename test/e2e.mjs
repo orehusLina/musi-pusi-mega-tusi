@@ -120,9 +120,9 @@ const png = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR
 const fd = new FormData();
 fd.append('file', new Blob([png], { type: 'image/png' }), 'a.png');
 const up = await fetch(`${BASE}/api/upload`, { method: 'POST', headers: { authorization: 'dev 1:x' }, body: fd }).then((r) => r.json());
-check(/^\/uploads\/.+\.png$/.test(up.path || ''), `загрузка фото: ${up.path}`);
+check(/^\/uploads\/.+\.webp$/.test(up.path || ''), `загрузка фото, сжато в WebP: ${up.path}`);
 const img = await fetch(BASE + up.path);
-check(img.ok && img.headers.get('content-type') === 'image/png', 'фото отдаётся');
+check(img.ok && img.headers.get('content-type') === 'image/webp', 'фото отдаётся');
 const multi = await call('olya', 'POST', '/api/cards', { title: 'С фото', photos: [up.path, up.path, '/etc/passwd'] });
 const mc = (await call('olya', 'GET', `/api/cards/${multi.id}`)).card;
 check(mc.photos.length === 1 && mc.photo === up.path, `несколько фото: дубли и чужие пути отброшены (${mc.photos.length})`);

@@ -1,13 +1,37 @@
-import { all, run, getSetting, setSetting } from './db.js';
+import fs from 'node:fs/promises';
+import path from 'node:path';
+import { db, all, run, getSetting, setSetting } from './db.js';
+import { cfg } from './config.js';
 import * as L from './logic.js';
 import { reminders } from './bot.js';
+import { cleanupUploads } from './fetchers.js';
 import { dateKey, slotToDate, daysBetween, HOUR } from './time.js';
+
+/** Все пути к фото, на которые что-то ссылается (в любых карточках, включая черновики и архив). */
+export function referencedUploads() {
+  const refs = new Set();
+  for (const c of all('SELECT photo, photos FROM cards')) {
+    if (c.photo) refs.add(c.photo);
+    for (const p of JSON.parse(c.photos || '[]')) refs.add(p);
+  }
+  for (const m of all('SELECT path FROM memory_photos')) refs.add(m.path);
+  return refs;
+}
 
 /** Выполнить job не чаще раза за ключ (например, раз в день) — переживает перезапуски. */
 async function once(key, fn) {
   if (getSetting(`job:${key}`)) return;
   setSetting(`job:${key}`, Date.now());
   await fn();
+}
+
+export async function backupDb(tag) {
+  const dir = path.join(cfg.dataDir, 'backups');
+  await fs.mkdir(dir, { recursive: true });
+  await db.backup(path.join(dir, `app-${tag}.db`));
+  const files = (await fs.readdir(dir)).filter((f) => /^app-.+\.db$/.test(f)).sort();
+  for (const f of files.slice(0, Math.max(0, files.length - 14))) await fs.unlink(path.join(dir, f));
+  console.log(`backup: app-${tag}.db`);
 }
 
 async function tick() {
@@ -60,6 +84,15 @@ async function tick() {
     }
     // Через 6 часов после начала — встреча прошла, просим оценку и фотки
     if (now.getTime() > start.getTime() + 6 * HOUR) L.finishMeeting(round);
+  }
+
+  // Каждую ночь в 4:00 — бэкап базы (храним 14 последних) и удаление ненужных фото
+  if (h === 4) {
+    await once(`backup:${today}`, () => backupDb(today));
+    await once(`cleanup:${today}`, async () => {
+      const { removed, freed } = await cleanupUploads(referencedUploads());
+      if (removed) console.log(`cleanup: removed ${removed} files, freed ${Math.round(freed / 1024)} KB`);
+    });
   }
 
   // Среда 19:00 — если давно не виделись и ничего не запущено

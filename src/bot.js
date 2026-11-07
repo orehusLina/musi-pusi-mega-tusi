@@ -3,7 +3,7 @@ import { cfg, DURATION_HOURS } from './config.js';
 import { run } from './db.js';
 import * as L from './logic.js';
 import { upsertUser, joinGroup, createDraftCard } from './api.js';
-import { linkPreview, weather } from './fetchers.js';
+import { linkPreview, weather, saveUpload } from './fetchers.js';
 import { slotToDate, humanDate, humanSlot, dateKey } from './time.js';
 
 /* ---------------- Публичный адрес (свой домен или быстрый туннель Cloudflare) ---------------- */
@@ -74,7 +74,7 @@ function icsFor(round, card) {
   const start = slotToDate(round.slot);
   const end = new Date(start.getTime() + (DURATION_HOURS[card.duration] || 3) * 3600e3);
   const utc = (d) => d.toISOString().replace(/[-:]/g, '').replace(/\.\d{3}/, '');
-  const e = (s) => String(s || '').replace(/\\/g, '\\\\').replace(/[,;]/g, (m) => `\\${m}`).replace(/\n/g, '\\n');
+  const e = (s) => String(s || '').replace(/\r/g, '').replace(/\\/g, '\\\\').replace(/[,;]/g, (m) => `\\${m}`).replace(/\n/g, '\\n');
   return [
     'BEGIN:VCALENDAR', 'VERSION:2.0', 'PRODID:-//kuda-shodim//RU', 'CALSCALE:GREGORIAN', 'BEGIN:VEVENT',
     `UID:round-${round.id}-${round.slot.replace(/\W/g, '')}@kuda-shodim`,
@@ -99,7 +99,7 @@ function partialsText(roundId, excludeId) {
 
 const HOW_IT_WORKS =
   '<b>Как это работает</b>\n\n' +
-  '<b>1. Идеи.</b> Каждая добавляет места и события, куда хотелось бы сходить. Проще всего — прислать мне ссылку, я сама сделаю карточку.\n\n' +
+  '<b>1. Идеи.</b> Каждая добавляет места и события, куда хотелось бы сходить. Проще всего — прислать мне ссылку, переслать пост о мероприятии или описать его парой строк: я сделаю черновик карточки.\n\n' +
   '<b>2. Голосование.</b> По субботам я присылаю приглашение. Открываешь приложение и отмечаешь несколько карточек: «очень хочу», «можно» или «нет». Это занимает пару минут. Если неделя занята — нажми «пропускаю».\n\n' +
   '<b>3. Выбор.</b> Когда все отметились, я случайно выбираю одну активность из тех, что подошли всем. Если общего нет — покажу частичные совпадения и попрошу быстро довыбрать.\n\n' +
   '<b>4. Время.</b> Каждая отмечает, когда свободна в ближайшие две недели, — я покажу время, которое подходит всем. Нажимаете «Бронируем», и всем приходит файл для календаря.\n\n' +
@@ -250,8 +250,8 @@ export async function startBot() {
     const crew = ms.length > 1 ? `\n\nСейчас в компании: ${esc(names(ms))}.` : '';
     const first = fresh
       ? '<b>Готово, ты в компании.</b>' + crew +
-        '\n\nДля начала добавь пару идей, куда хотелось бы сходить. Можно просто прислать мне ссылку — на событие, выставку, кафе.'
-      : '<b>Привет!</b> Открой приложение кнопкой ниже. Чтобы добавить идею, просто пришли мне ссылку.' + crew;
+        '\n\nДля начала добавь пару идей, куда хотелось бы сходить. Можно просто прислать мне ссылку, переслать пост или описать идею текстом.'
+      : '<b>Привет!</b> Открой приложение кнопкой ниже. Чтобы добавить идею, пришли мне ссылку, перешли пост или опиши её текстом.' + crew;
     await ctx.reply(first, { parse_mode: 'HTML', reply_markup: keyboard('Открыть приложение') });
   };
 
@@ -279,7 +279,7 @@ export async function startBot() {
 
   bot.command('help', (ctx) =>
     ctx.reply(
-      HOW_IT_WORKS + '\n\n<b>Команды</b>\n/new — начать голосование сейчас\n/help — эта справка\n\nИли просто пришли ссылку — сделаю карточку.',
+      HOW_IT_WORKS + '\n\n<b>Команды</b>\n/new — начать голосование сейчас\n/help — эта справка\n\nИли просто пришли ссылку, перешли пост или опиши идею текстом — сделаю черновик карточки.',
       { parse_mode: 'HTML', reply_markup: keyboard('Открыть приложение') },
     ),
   );
@@ -296,30 +296,59 @@ export async function startBot() {
     }
   });
 
-  bot.on('message:text', async (ctx) => {
-    const text = ctx.message.text.trim();
+  // Идея из сообщения: ссылка (берём название и картинку со страницы), пересланный пост с фото
+  // или просто текст (первая строка — название, остальное — описание).
+  bot.on(['message:text', 'message:photo'], async (ctx) => {
+    const msg = ctx.message;
+    const text = (msg.text || msg.caption || '').trim();
     const u = L.userById(ctx.from.id);
     if (!u.is_member) {
+      if (!msg.text) return ctx.reply('Сначала пришли код приглашения — его знают подруги.');
       try {
         joinGroup(ctx.from.id, text);
         await ctx.reply(HOW_IT_WORKS, { parse_mode: 'HTML' });
         return memberWelcome(ctx, true);
-      } catch {
-        return ctx.reply('Это не похоже на код приглашения. Уточни его у подруг и пришли ещё раз.');
+      } catch (e) {
+        return ctx.reply(e.status === 429 ? e.message : 'Это не похоже на код приглашения. Уточни его у подруг и пришли ещё раз.');
       }
     }
-    const m = text.match(URL_RE);
-    if (!m) {
-      return ctx.reply('Чтобы добавить идею, пришли ссылку. Остальное — в приложении.', { reply_markup: keyboard('Открыть приложение') });
+    const link = (text.match(URL_RE) || [])[0];
+    const hasPhoto = !!msg.photo?.length;
+    if (!link && !hasPhoto && text.length < 12) {
+      return ctx.reply(
+        'Чтобы добавить идею, пришли ссылку, перешли пост о мероприятии или просто опиши его парой строк: первая строка — название, дальше — подробности.',
+        { reply_markup: keyboard('Открыть приложение') },
+      );
     }
-    const wait = await ctx.reply('Открываю ссылку…');
-    const prev = await linkPreview(m[0]);
-    const why = text.replace(m[0], '').trim();
-    const id = createDraftCard(ctx.from.id, { title: prev.title, why: why || prev.description, link: m[0], photo: prev.image });
+    const wait = await ctx.reply('Делаю черновик…');
+    const photos = [];
+    if (hasPhoto) {
+      try {
+        const f = await ctx.api.getFile(msg.photo[msg.photo.length - 1].file_id);
+        const res = await fetch(`https://api.telegram.org/file/bot${cfg.botToken}/${f.file_path}`, { signal: AbortSignal.timeout(15000) });
+        photos.push(await saveUpload(Buffer.from(await res.arrayBuffer()), 'image/jpeg'));
+      } catch (e) {
+        console.warn('photo download failed', e.message);
+      }
+    }
+    const rest = (link ? text.replace(link, '') : text).trim();
+    const lines = rest.split('\n').map((x) => x.trim()).filter(Boolean);
+    let title = '';
+    let why = '';
+    if (link) {
+      const prev = await linkPreview(link);
+      if (prev.image) photos.push(prev.image);
+      title = prev.title || lines[0] || '';
+      why = rest || prev.description;
+    } else {
+      title = lines[0] || '';
+      why = lines.slice(1).join('\n');
+    }
+    const id = createDraftCard(ctx.from.id, { title, why, link: link || '', photos });
     await ctx.api.editMessageText(
       ctx.chat.id,
       wait.message_id,
-      `Черновик готов: <b>${esc(prev.title || 'без названия')}</b>\n\nДобавь пару слов, почему это интересно, и выбери категорию — после этого карточка попадёт в общий список.`,
+      `Черновик готов: <b>${esc(title || 'без названия')}</b>\n\nПроверь название, добавь категорию и детали — после этого идея попадёт в общий список.`,
       { parse_mode: 'HTML', reply_markup: keyboard('Дооформить карточку', `card/${id}/edit`) },
     );
   });
