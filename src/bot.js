@@ -226,6 +226,29 @@ export const reminders = {
 
 /* ---------------- Сам бот ---------------- */
 
+/**
+ * Собирает сообщения одного альбома (общий media_group_id) и вызывает handler один раз
+ * со всеми сообщениями, когда пауза между частями превысила delay. Обычные сообщения — сразу.
+ */
+export function albumCollector(handler, delay = 1500) {
+  const albums = new Map();
+  return (ctx, msg) => {
+    const gid = msg.media_group_id;
+    if (!gid) return handler(ctx, [msg]);
+    let a = albums.get(gid);
+    if (!a) {
+      a = { ctx, msgs: [] };
+      albums.set(gid, a);
+    }
+    a.msgs.push(msg);
+    clearTimeout(a.timer);
+    a.timer = setTimeout(() => {
+      albums.delete(gid);
+      handler(a.ctx, a.msgs);
+    }, delay);
+  };
+}
+
 const isTelegramLink = (u) => /^https?:\/\/(t\.me|telegram\.me|telegram\.dog)\//i.test(u);
 
 /**
@@ -335,8 +358,13 @@ export async function startBot() {
 
   // Идея из сообщения: ссылка (берём название и картинку со страницы), пересланный пост с фото
   // или просто текст (первая строка — название, остальное — описание).
-  bot.on(['message:text', 'message:photo'], async (ctx) => {
-    const msg = ctx.message;
+  // Альбом (несколько фото) приходит пачкой отдельных сообщений с одним media_group_id,
+  // подпись — только у одного из них. Ждём, пока придут все, и делаем ОДНУ идею.
+  const collect = albumCollector((ctx, msgs) => handleIdea(ctx, msgs).catch((e) => console.error('idea failed', e)));
+  bot.on(['message:text', 'message:photo'], (ctx) => collect(ctx, ctx.message));
+
+  async function handleIdea(ctx, msgs) {
+    const msg = msgs.find((m) => (m.text || m.caption || '').trim()) || msgs[0];
     const text = (msg.text || msg.caption || '').trim();
     const u = L.userById(ctx.from.id);
     if (!u.is_member) {
@@ -350,7 +378,8 @@ export async function startBot() {
       }
     }
     const links = messageLinks(msg);
-    const hasPhoto = !!msg.photo?.length;
+    const photoMsgs = msgs.filter((m) => m.photo?.length).slice(0, 10);
+    const hasPhoto = photoMsgs.length > 0;
     if (!links.length && !hasPhoto && text.length < 12) {
       return ctx.reply(
         'Чтобы добавить идею, пришли ссылку, перешли пост о мероприятии или просто опиши его парой строк: первая строка — название, дальше — подробности.',
@@ -359,9 +388,9 @@ export async function startBot() {
     }
     const wait = await ctx.reply('Делаю черновик…');
     const photos = [];
-    if (hasPhoto) {
+    for (const m of photoMsgs) {
       try {
-        const f = await ctx.api.getFile(msg.photo[msg.photo.length - 1].file_id);
+        const f = await ctx.api.getFile(m.photo[m.photo.length - 1].file_id);
         const res = await fetch(`https://api.telegram.org/file/bot${cfg.botToken}/${f.file_path}`, { signal: AbortSignal.timeout(15000) });
         photos.push(await saveUpload(Buffer.from(await res.arrayBuffer()), 'image/jpeg'));
       } catch (e) {
@@ -371,16 +400,20 @@ export async function startBot() {
     // Страницу для разбора берём из «внешней» ссылки (сайт, билеты); пост в Telegram — только если больше ничего нет
     const external = links.find((l) => !isTelegramLink(l.url));
     const pageUrl = external?.url || (!text ? links[0]?.url : '');
-    const rest = text.replace(/https?:\/\/[^\s<>"]+/gi, '').trim();
-    const lines = rest.split('\n').map((x) => x.trim()).filter(Boolean);
     let page = {};
+    let rest = text.replace(/https?:\/\/[^\s<>"]+/gi, '').trim();
     if (pageUrl) {
       page = await linkPreview(pageUrl);
-      if (page.image) photos.push(page.image);
+      if (isTelegramLink(pageUrl)) {
+        // У поста в Telegram заголовок страницы — название канала, а сам текст поста — в описании
+        if (!rest && page.description) rest = page.description;
+        page = { ...page, title: '' };
+        if (!photos.length && page.image) photos.push(page.image);
+      } else if (page.image) photos.push(page.image);
     }
+    const lines = rest.split('\n').map((x) => x.trim()).filter(Boolean);
     let title = lines[0] || page.title || '';
-    let why = lines.length > 1 ? lines.slice(1).join('\n') : page.description || '';
-    if (!text && page.title) { title = page.title; why = page.description; }
+    let why = lines.length > 1 ? lines.slice(1).join('\n') : pageUrl && isTelegramLink(pageUrl) ? '' : page.description || '';
     // Нейросеть: дата, цена, категория, место и т.д. Если не ответила — остаётся простой разбор выше.
     const ai = await extractIdea({ text: rest, url: pageUrl || '', page });
     const card = ai
@@ -394,7 +427,7 @@ export async function startBot() {
         (ai ? 'Проверь, всё ли верно, и добавь в идеи.' : 'Проверь название, добавь категорию и детали — после этого идея попадёт в общий список.'),
       { parse_mode: 'HTML', reply_markup: keyboard('Дооформить карточку', `card/${id}/edit`) },
     );
-  });
+  }
 
   bot.catch((e) => console.error('bot error', e.error?.message || e));
   await bot.api.setMyCommands([

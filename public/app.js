@@ -882,17 +882,43 @@ async function renderEditor(id, draft = null) {
     ? (await api(`/api/cards/${id}`)).card
     : { title: '', why: '', link: '', photo: '', tags: [], budget: 1, duration: 'short', time_of_day: [], area: '', outdoor: false, needs_booking: false, available_until: null, fixed_at: null, status: 'new' });
   const f = { ...c, tags: new Set(c.tags), time_of_day: new Set(c.time_of_day), photos: [...photosOf(c)], links: linksOf(c).map((l) => ({ ...l })) };
-  if (!f.links.length) f.links.push({ url: '', label: '' });
-  // Текущие значения полей ссылок из формы
-  const readLinks = () =>
-    [...document.querySelectorAll('#links .lrow')].map((r) => ({ label: r.querySelector('.llabel').value.trim(), url: r.querySelector('.lurl').value.trim() }));
-  const linksRows = () =>
-    f.links.map((l, i) => `<div class="lrow">
-        <input class="lurl" type="url" inputmode="url" placeholder="https://…" value="${esc(l.url)}">
-        <input class="llabel" maxlength="40" placeholder="${i === 0 ? 'Например, «Билеты»' : 'Подпись'}" value="${esc(l.label)}">
-        ${f.links.length > 1 || l.url ? `<button class="ldel" data-act="ldel" data-i="${i}" aria-label="Убрать ссылку">${icon('x')}</button>` : ''}
-      </div>`).join('');
-  const drawLinks = () => (document.getElementById('links').innerHTML = linksRows());
+  f.links = f.links.filter((l) => l.url);
+  let editIdx = null; // какая ссылка сейчас раскрыта для правки
+  // Забрать значения из открытых полей в f.links
+  const commitLinks = () => {
+    const nu = document.getElementById('lnew');
+    if (nu) {
+      const url = nu.value.trim();
+      f.links = url ? [{ url, label: '' }] : [];
+    }
+    const eu = document.getElementById('leurl');
+    if (eu && editIdx !== null) {
+      const url = eu.value.trim();
+      const label = document.getElementById('lelabel').value.trim();
+      if (url) f.links[editIdx] = { url, label };
+      else f.links.splice(editIdx, 1);
+    }
+  };
+  const readLinks = () => {
+    commitLinks();
+    return f.links.filter((l) => l.url);
+  };
+  const fillBtn = `<button class="btn small" data-act="preview">${icon('bulb')}Заполнить</button>`;
+  const linksHtml = () => {
+    if (!f.links.length && editIdx === null) {
+      return `<div class="row"><input id="lnew" class="grow" type="url" inputmode="url" placeholder="Ссылка на событие или место"></div>`;
+    }
+    const chips = f.links.map((l, i) => `<span class="lchip ed ${i === editIdx ? 'on' : ''}" data-act="ledit" data-i="${i}">
+        <span class="lt">${esc(l.url ? linkLabel(l) : 'Новая ссылка')}</span>
+        <button class="lx" data-act="ldel" data-i="${i}" aria-label="Убрать ссылку">${icon('x')}</button></span>`).join('');
+    const add = f.links.length < 6 && editIdx === null ? `<button class="lchip add" data-act="ladd">${icon('plus')}Ссылка</button>` : '';
+    const edit = editIdx === null ? '' : `<div class="ledit">
+        <input id="leurl" type="url" inputmode="url" placeholder="https://…" value="${esc(f.links[editIdx]?.url || '')}">
+        <div class="row"><input id="lelabel" class="grow" maxlength="40" placeholder="Подпись, например «Билеты»" value="${esc(f.links[editIdx]?.label || '')}">
+        <button class="btn small secondary" data-act="lok">Готово</button></div></div>`;
+    return `<div class="links">${chips}${add}</div>${edit}`;
+  };
+  const drawLinks = () => (document.getElementById('links').innerHTML = linksHtml());
   const touched = new Set(c._touched || []); // что человек выбрал сам — нейросеть это не перезаписывает
   const collect = () => {
     const v = (k) => document.getElementById(k).value;
@@ -931,16 +957,10 @@ async function renderEditor(id, draft = null) {
 
   view(
     `${top(c.status === 'draft' ? 'Допиши карточку' : id ? 'Изменить идею' : 'Новая идея')}
-    <p class="sub">${c.status === 'draft' ? 'Бот заполнил то, что нашёл. Проверь и поправь, если что-то не так.' : 'Обязательно только название — остальное по желанию.'}</p>
+    <p class="sub">${c.status === 'draft' ? 'Бот заполнил то, что нашёл. Проверь и поправь, если что-то не так.' : ME.ai ? 'Вставь ссылку или напиши описание и нажми «Заполнить» — остальное подтянется само. Обязательно только название.' : 'Вставь ссылку и нажми «Заполнить». Обязательно только название.'}</p>
 
     <div class="panel">
-      <div class="field"><span class="lbl">Ссылки</span><div id="links">${linksRows()}</div>
-        <div class="row" style="margin-top:8px">
-          ${f.links.length < 6 ? `<button class="btn small secondary" data-act="ladd">${icon('plus')}Ещё ссылка</button>` : ''}
-          <span class="grow"></span>
-          <button class="btn small" data-act="preview">Заполнить</button>
-        </div>
-        <span class="help">${ME.ai ? 'Вставь ссылку или напиши описание ниже и нажми «Заполнить» — нейросеть разложит дату, цену, категорию и место. Ссылок может быть несколько: сайт, билеты, пост.' : 'Вставь ссылку и нажми «Заполнить» — название и картинка подтянутся.'}</span></div>
+      <div class="field"><div class="row" style="margin-bottom:8px"><span class="lbl grow" style="margin:0">Ссылки</span>${fillBtn}</div><div id="links">${linksHtml()}</div></div>
       <label class="field"><span class="lbl">Название</span><input id="title" maxlength="140" placeholder="Например, иммерсивный спектакль" value="${esc(f.title)}"></label>
       <label class="field"><span class="lbl">Почему стоит сходить</span><textarea id="why" maxlength="1500" placeholder="Пара слов: что там интересного">${esc(f.why)}</textarea></label>
       <div class="field"><span class="lbl">Фото</span><div class="pstrip" id="pstrip"></div><span class="help">До ${MAX_PHOTOS} фото. Первое — обложка. Нажми на фото, чтобы посмотреть.</span></div>
@@ -975,8 +995,10 @@ async function renderEditor(id, draft = null) {
         el.parentElement.querySelectorAll('.chip').forEach((b) => b.classList.toggle('on', b === el));
         haptic();
       },
-      ladd: () => { f.links = [...readLinks(), { url: '', label: '' }]; drawLinks(); document.querySelectorAll('#links .lurl')[f.links.length - 1]?.focus(); },
-      ldel: (el) => { f.links = readLinks(); f.links.splice(Number(el.dataset.i), 1); if (!f.links.length) f.links.push({ url: '', label: '' }); drawLinks(); },
+      ladd: () => { commitLinks(); f.links.push({ url: '', label: '' }); editIdx = f.links.length - 1; drawLinks(); document.getElementById('leurl')?.focus(); },
+      ledit: (el) => { commitLinks(); const i = Number(el.dataset.i); editIdx = editIdx === i ? null : i; drawLinks(); },
+      ldel: (el) => { commitLinks(); f.links.splice(Number(el.dataset.i), 1); editIdx = null; drawLinks(); haptic(); },
+      lok: () => { commitLinks(); editIdx = null; drawLinks(); },
       pdel: (el) => { f.photos.splice(Number(el.dataset.i), 1); drawStrip(); haptic(); },
       pcover: (el) => { const [p] = f.photos.splice(Number(el.dataset.i), 1); f.photos.unshift(p); drawStrip(); haptic(); },
       tag: (el) => { const k = el.dataset.k; f.tags.has(k) ? f.tags.delete(k) : f.tags.add(k); el.classList.toggle('on'); haptic(); },

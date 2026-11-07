@@ -292,6 +292,15 @@ check(JSON.stringify(fwd) === JSON.stringify([
 const plain = messageLinks({ text: 'Глянь https://site.example/ev и https://t.me/c/1 ещё', entities: [{ type: 'url', offset: 6, length: 23 }] });
 check(plain.length === 2 && plain[0].url === 'https://site.example/ev', 'ссылки из текста, внешние первыми, без дублей');
 check(messageLinks({ text: 'просто текст' }).length === 0, 'без ссылок — пусто');
+const { albumCollector } = await import('/app/src/bot.js');
+const calls = [];
+const coll = albumCollector((ctx, msgs) => calls.push(msgs.map((m) => m.message_id)), 100);
+coll({}, { message_id: 1, media_group_id: 'g1', caption: 'Сангрия' });
+coll({}, { message_id: 2, media_group_id: 'g1' });
+coll({}, { message_id: 3, media_group_id: 'g1' });
+coll({}, { message_id: 9, text: 'отдельная идея' });
+await new Promise((r) => setTimeout(r, 300));
+check(JSON.stringify(calls) === JSON.stringify([[9], [1, 2, 3]]), `альбом из 3 фото — одна идея, обычное сообщение — отдельно (${JSON.stringify(calls)})`);
 const privateFwd = messageLinks({ text: 'x', forward_origin: { type: 'channel', chat: { title: 'Закрытый' }, message_id: 1 } });
 check(privateFwd.length === 0, 'у закрытого канала ссылки на пост нет — и не выдумываем');
 

@@ -364,3 +364,14 @@ body.notabs .actionbar, body.notabs .votebar { bottom: env(safe-area-inset-botto
 .lrow .llabel { grid-area: label; font-size: 15px; padding: 9px 12px; }
 .lrow .ldel { grid-area: del; align-self: center; width: 34px; height: 34px; border-radius: 50%; display: grid; place-items: center; background: var(--surface-2); color: var(--hint); }
 .lrow .ldel svg.i { width: 16px; height: 16px; }
+/* Компактные ссылки в редакторе */
+.field .row .lbl { font-size: 14px; font-weight: 600; color: color-mix(in srgb, var(--text) 75%, var(--hint)); }
+.lchip.ed { padding: 0 4px 0 12px; height: 36px; cursor: pointer; }
+.lchip.ed .lt { max-width: 190px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.lchip.ed .lx { width: 28px; height: 28px; display: grid; place-items: center; color: var(--hint); border-radius: 50%; }
+.lchip.ed .lx svg.i { width: 14px; height: 14px; color: var(--hint); }
+.lchip.ed.on { border-color: var(--text); }
+.lchip.add { height: 36px; color: var(--hint); border-style: dashed; background: transparent; }
+.lchip.add svg.i { color: var(--hint); }
+.ledit { display: grid; gap: 8px; margin-top: 10px; padding: 12px; border-radius: 12px; background: var(--surface-2); }
+.ledit input { background: var(--surface); }
