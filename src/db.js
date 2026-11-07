@@ -122,6 +122,16 @@ CREATE TABLE IF NOT EXISTS settings (
 );
 `);
 
+// Миграции для уже существующих баз
+for (const sql of ["ALTER TABLE cards ADD COLUMN photos TEXT NOT NULL DEFAULT '[]'"]) {
+  try {
+    db.exec(sql);
+  } catch {
+    /* колонка уже есть */
+  }
+}
+db.exec("UPDATE cards SET photos=json_array(photo) WHERE photos='[]' AND photo<>''");
+
 const cache = new Map();
 const st = (sql) => {
   let s = cache.get(sql);

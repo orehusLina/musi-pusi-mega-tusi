@@ -49,6 +49,7 @@ export function joinGroup(userId, code) {
 /* ---------------- Карточки ---------------- */
 
 const str = (v, max) => String(v ?? '').trim().slice(0, max);
+const UPLOAD_RE = /^\/uploads\/[a-f0-9]+\.(jpg|png|webp|gif)$/;
 const dateOrNull = (v) => (/^\d{4}-\d{2}-\d{2}$/.test(v || '') ? v : null);
 
 function cleanCard(b) {
@@ -56,7 +57,7 @@ function cleanCard(b) {
     title: str(b.title, 140),
     why: str(b.why, 1500),
     link: str(b.link, 500),
-    photo: /^\/uploads\/[a-f0-9]+\.(jpg|png|webp|gif)$/.test(b.photo || '') ? b.photo : '',
+    photos: [...new Set(Array.isArray(b.photos) ? b.photos : b.photo ? [b.photo] : [])].filter((x) => UPLOAD_RE.test(x)).slice(0, 10),
     tags: JSON.stringify((b.tags || []).filter((t) => t in TAGS)),
     budget: [0, 1, 2, 3].includes(Number(b.budget)) ? Number(b.budget) : 1,
     duration: ['short', 'half', 'day'].includes(b.duration) ? b.duration : 'short',
@@ -68,6 +69,8 @@ function cleanCard(b) {
     fixed_at: /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/.test(b.fixed_at || '') ? b.fixed_at : null,
   };
   if (c.link && !/^https?:\/\//i.test(c.link)) c.link = `https://${c.link}`;
+  c.photo = c.photos[0] || '';
+  c.photos = JSON.stringify(c.photos);
   if (!c.title) throw new UserError('Нужно хотя бы название');
   return c;
 }
@@ -75,8 +78,9 @@ function cleanCard(b) {
 export function createDraftCard(userId, data) {
   const now = Date.now();
   const info = run(
-    `INSERT INTO cards(author_id,status,title,why,link,photo,created_at,updated_at) VALUES(?,?,?,?,?,?,?,?)`,
-    userId, 'draft', str(data.title, 140), str(data.why, 1500), str(data.link, 500), data.photo || '', now, now,
+    `INSERT INTO cards(author_id,status,title,why,link,photo,photos,created_at,updated_at) VALUES(?,?,?,?,?,?,?,?,?)`,
+    userId, 'draft', str(data.title, 140), str(data.why, 1500), str(data.link, 500), data.photo || '',
+    JSON.stringify(data.photo ? [data.photo] : []), now, now,
   );
   return Number(info.lastInsertRowid);
 }
@@ -181,7 +185,10 @@ export async function registerApi(app) {
     const status = req.query.status === 'visited' ? 'visited' : 'active';
     const cards = all('SELECT * FROM cards WHERE status=? ORDER BY created_at DESC', status).map(L.parseCard);
     const drafts = all("SELECT * FROM cards WHERE status='draft' AND author_id=? ORDER BY created_at DESC", uid(req)).map(L.parseCard);
-    return { cards, drafts };
+    const counts = Object.fromEntries(
+      all("SELECT status, COUNT(*) n FROM cards WHERE status IN ('active','visited') GROUP BY status").map((r) => [r.status, r.n]),
+    );
+    return { cards, drafts, counts: { active: counts.active || 0, visited: counts.visited || 0 } };
   });
   app.get('/api/cards/:id', async (req) => {
     const c = L.cardById(Number(req.params.id));
@@ -192,9 +199,9 @@ export async function registerApi(app) {
     const c = cleanCard(req.body || {});
     const now = Date.now();
     const info = run(
-      `INSERT INTO cards(author_id,status,title,why,link,photo,tags,budget,duration,time_of_day,area,outdoor,needs_booking,available_until,fixed_at,created_at,updated_at)
-       VALUES(?, 'active', ?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
-      uid(req), c.title, c.why, c.link, c.photo, c.tags, c.budget, c.duration, c.time_of_day, c.area, c.outdoor, c.needs_booking,
+      `INSERT INTO cards(author_id,status,title,why,link,photo,photos,tags,budget,duration,time_of_day,area,outdoor,needs_booking,available_until,fixed_at,created_at,updated_at)
+       VALUES(?, 'active', ?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+      uid(req), c.title, c.why, c.link, c.photo, c.photos, c.tags, c.budget, c.duration, c.time_of_day, c.area, c.outdoor, c.needs_booking,
       c.available_until, c.fixed_at, now, now,
     );
     return { id: Number(info.lastInsertRowid) };
@@ -206,9 +213,9 @@ export async function registerApi(app) {
     if (old.status === 'draft' && old.author_id !== uid(req)) throw new UserError('Это чужой черновик', 403);
     const c = cleanCard(req.body || {});
     run(
-      `UPDATE cards SET title=?,why=?,link=?,photo=?,tags=?,budget=?,duration=?,time_of_day=?,area=?,outdoor=?,needs_booking=?,
+      `UPDATE cards SET title=?,why=?,link=?,photo=?,photos=?,tags=?,budget=?,duration=?,time_of_day=?,area=?,outdoor=?,needs_booking=?,
          available_until=?,fixed_at=?,updated_at=?, status=CASE WHEN status='draft' THEN 'active' ELSE status END WHERE id=?`,
-      c.title, c.why, c.link, c.photo, c.tags, c.budget, c.duration, c.time_of_day, c.area, c.outdoor, c.needs_booking,
+      c.title, c.why, c.link, c.photo, c.photos, c.tags, c.budget, c.duration, c.time_of_day, c.area, c.outdoor, c.needs_booking,
       c.available_until, c.fixed_at, Date.now(), id,
     );
     return { id };

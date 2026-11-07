@@ -1,7 +1,7 @@
 /* Куда сходим — Telegram Mini App (без сборки, чистый JS) */
 
 const tg = window.Telegram?.WebApp;
-const DEV = new URLSearchParams(location.search).get('dev'); // локально: ?dev=1:Аня
+const DEV = new URLSearchParams(location.search).get('dev'); // локально: ?dev=1:Алина
 if (tg) {
   tg.ready();
   tg.expand();
@@ -30,6 +30,7 @@ const P = {
   check: '<path d="M20 6 9 17l-5-5"/>',
   flame: '<path d="M8.5 14.5A2.5 2.5 0 0 0 11 12c0-1.38-.5-2-1-3-1.07-2.14-.22-4.05 2-6 .5 2.5 2 4.9 4 6.5 2 1.6 3 3.5 3 5.5a7 7 0 1 1-14 0c0-1.15.43-2.29 1-3a2.5 2.5 0 0 0 2.5 2.5z"/>',
   shuffle: '<path d="M2 18h1.4c1.3 0 2.5-.6 3.3-1.7l6.1-8.6c.7-1.1 2-1.7 3.3-1.7H22"/><path d="m18 2 4 4-4 4"/><path d="M2 6h1.9c1.5 0 2.9.9 3.6 2.2"/><path d="M22 18h-5.9c-1.3 0-2.6-.7-3.3-1.8l-.5-.8"/><path d="m18 14 4 4-4 4"/>',
+  home: '<path d="M3 10.5 12 3l9 7.5V20a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1z"/>',
   bulb: '<path d="M15 14c.2-1 .7-1.7 1.5-2.5 1-.9 1.5-2.2 1.5-3.5A6 6 0 0 0 6 8c0 1 .2 2.2 1.5 3.5.7.7 1.3 1.5 1.5 2.5"/><path d="M9 18h6"/><path d="M10 22h4"/>',
   camera: '<path d="M14.5 4h-5L7 7H4a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2h-3l-2.5-3z"/><circle cx="12" cy="13" r="3"/>',
   sliders: '<path d="M4 21v-7M4 10V3M12 21v-9M12 8V3M20 21v-5M20 12V3M1 14h6M9 8h6M17 16h6"/>',
@@ -45,22 +46,32 @@ const P = {
   heart: '<path d="M19 14c1.5-1.5 3-3.2 3-5.5A5.5 5.5 0 0 0 16.5 3c-1.8 0-3 .5-4.5 2-1.5-1.5-2.7-2-4.5-2A5.5 5.5 0 0 0 2 8.5c0 2.3 1.5 4 3 5.5l7 7Z"/>',
   moon: '<path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z"/>',
   star: '<path d="M12 2l3.1 6.3 6.9 1-5 4.9 1.2 6.8L12 17.8 5.8 21l1.2-6.8-5-4.9 6.9-1z"/>',
-  users: '<path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.9M16 3.1a4 4 0 0 1 0 7.8"/>',
   link: '<path d="M10 13a5 5 0 0 0 7.5.5l3-3a5 5 0 0 0-7-7l-1.7 1.7"/><path d="M14 11a5 5 0 0 0-7.5-.5l-3 3a5 5 0 0 0 7 7l1.7-1.7"/>',
   joker: '<rect x="4" y="2" width="16" height="20" rx="2"/><path d="m12 7 1.5 3 3 .4-2.2 2.1.6 3L12 14l-2.9 1.5.6-3-2.2-2.1 3-.4z"/>',
   refresh: '<path d="M3 12a9 9 0 0 1 15.5-6.3L21 8"/><path d="M21 3v5h-5"/><path d="M21 12a9 9 0 0 1-15.5 6.3L3 16"/><path d="M8 16H3v5"/>',
+  info: '<circle cx="12" cy="12" r="10"/><path d="M12 16v-4M12 8h.01"/>',
+  edit: '<path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 1 1 3 3L7 19l-4 1 1-4Z"/>',
 };
 const icon = (name) => `<svg class="i" viewBox="0 0 24 24" aria-hidden="true">${P[name]}</svg>`;
 
-/* ---------------- тема ---------------- */
+/* ---------------- хранилище и тема ---------------- */
 
-function currentTheme() {
-  try {
-    return localStorage.getItem('theme') || 'dark';
-  } catch {
-    return 'dark';
-  }
-}
+const store = {
+  get(k, d = null) {
+    try {
+      return localStorage.getItem(k) ?? d;
+    } catch {
+      return d;
+    }
+  },
+  set(k, v) {
+    try {
+      localStorage.setItem(k, v);
+    } catch { /* приватный режим */ }
+  },
+};
+
+const currentTheme = () => store.get('theme', 'dark');
 
 function rgbToHex(rgb) {
   const m = rgb.match(/\d+(\.\d+)?/g);
@@ -81,9 +92,7 @@ function syncTelegramColors() {
 
 function applyTheme(theme) {
   document.documentElement.dataset.theme = theme;
-  try {
-    localStorage.setItem('theme', theme);
-  } catch { /* приватный режим */ }
+  store.set('theme', theme);
   syncTelegramColors();
 }
 
@@ -119,10 +128,9 @@ function toast(msg) {
   t.textContent = msg;
   t.hidden = false;
   clearTimeout(toastTimer);
-  toastTimer = setTimeout(() => (t.hidden = true), 2800);
+  toastTimer = setTimeout(() => (t.hidden = true), 2600);
 }
 
-/** Выполнить действие и показать ошибку тостом. Возвращает true при успехе. */
 async function act(fn) {
   try {
     await fn();
@@ -149,6 +157,7 @@ function openLink(url) {
 
 function view(html, handlers = {}) {
   app.innerHTML = html;
+  queueMicrotask(bindGalleries);
   app.onclick = (e) => {
     const el = e.target.closest('[data-act]');
     if (!el || !app.contains(el)) return;
@@ -162,14 +171,22 @@ function view(html, handlers = {}) {
 const common = {
   open: (el) => openLink(el.dataset.url),
   go: (el) => (location.hash = el.dataset.to),
+  tipx: (el) => {
+    store.set(`tip:${el.dataset.k}`, '1');
+    el.closest('.note').remove();
+  },
+  lb: (el) => lightbox(JSON.parse(el.closest('[data-photos]').dataset.photos), Number(el.dataset.i || 0)),
 };
 
-const head = (label, title, sub = '', settings = false) =>
-  `<div class="head"><div><div class="label">${label}</div><h1>${title}</h1>${sub ? `<div class="hint sub">${sub}</div>` : ''}</div>
-   ${settings ? `<button class="icon-btn" data-act="go" data-to="#/settings" aria-label="Настройки">${icon('sliders')}</button>` : ''}</div>`;
+/* ---------------- строительные блоки ---------------- */
 
-const ava = (u) =>
-  `<span class="ava" style="--h:${hue(u?.id || 0)}">${u?.photo ? `<img src="${esc(u.photo)}" alt="">` : esc((u?.name || '?')[0].toUpperCase())}</span>`;
+const top = (title, action = '') => `<div class="top"><h1>${title}</h1>${action}</div>`;
+const settingsBtn = `<button class="icon-btn" data-act="go" data-to="#/settings" aria-label="Настройки">${icon('sliders')}</button>`;
+
+const initials = (name = '?') =>
+  name.split(/\s+/).filter(Boolean).slice(0, 2).map((w) => w[0].toUpperCase()).join('') || '?';
+const ava = (u, cls = '') =>
+  `<span class="ava ${cls}" style="--h:${hue(u?.id || 0)}">${u?.photo ? `<img src="${esc(u.photo)}" alt="">` : esc(initials(u?.name))}</span>`;
 
 const tagsHtml = (tags) => (tags || []).map((t) => `<span class="tag">${esc(DICT.tags[t] || t)}</span>`).join('');
 
@@ -182,12 +199,10 @@ const isWeekend = (key) => {
   const [y, m, d] = key.split('-').map(Number);
   return [0, 6].includes(new Date(y, m - 1, d).getDay());
 };
-
 function fmtTs(ts) {
   const d = new Date(ts);
   return `${WD[d.getDay()]}, ${d.getDate()} ${MON[d.getMonth()]}, ${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
 }
-
 function plural(n, one, few, many) {
   const m10 = n % 10, m100 = n % 100;
   if (m10 === 1 && m100 !== 11) return one;
@@ -195,53 +210,108 @@ function plural(n, one, few, many) {
   return many;
 }
 
-function facts(c) {
+function facts(c, short = false) {
   const f = [[icon('wallet'), BUDGET[c.budget]], [icon('clock'), DURATION[c.duration]]];
   if (c.area) f.push([icon('pin'), esc(c.area)]);
-  if (c.fixed_at) f.push([icon('calendar'), `${dayLabel(c.fixed_at.slice(0, 10), true)}, ${c.fixed_at.slice(11)}`]);
-  else if (c.available_until) f.push([icon('hourglass'), `до ${dayLabel(c.available_until, true)}`]);
-  if (c.outdoor) f.push([icon('sun'), 'На улице']);
-  if (c.needs_booking) f.push([icon('ticket'), 'Нужна бронь']);
+  if (!short) {
+    if (c.fixed_at) f.push([icon('calendar'), `${dayLabel(c.fixed_at.slice(0, 10), true)}, ${c.fixed_at.slice(11)}`]);
+    else if (c.available_until) f.push([icon('hourglass'), `до ${dayLabel(c.available_until, true)}`]);
+    if (c.outdoor) f.push([icon('sun'), 'На улице']);
+    if (c.needs_booking) f.push([icon('ticket'), 'Нужна бронь']);
+  }
   return `<div class="facts">${f.map(([i, t]) => `<span>${i}${t}</span>`).join('')}</div>`;
 }
 
+const photosOf = (c) => (c.photos?.length ? c.photos : c.photo ? [c.photo] : []);
 const media = (c) =>
-  c.photo ? `<img src="${esc(c.photo)}" alt="" loading="lazy">` : `<div class="ph" style="--h:${hue(c.id)}">${esc((c.title || '?')[0].toUpperCase())}</div>`;
+  c.photo || c.photos?.length
+    ? `<img src="${esc(photosOf(c)[0])}" alt="" loading="lazy">`
+    : `<div class="ph" style="--h:${hue(c.id)}">${esc((c.title || '?')[0].toUpperCase())}</div>`;
+const dots = (n, i = 0) => (n > 1 ? `<span class="dots">${Array.from({ length: n }, (_, k) => `<i class="${k === i ? 'on' : ''}"></i>`).join('')}</span>` : '');
 
-const people = (list) =>
-  `<div class="people">${list
-    .map((p) => `<span class="person ${p.done ? 'done' : ''} ${p.pass ? 'pass' : ''}">${ava(p.user)}${esc(p.user.name)}${p.pass ? ' · пропускает' : ''}<i class="st"></i></span>`)
-    .join('')}</div>`;
-
-function partialsHtml(partials, title) {
-  if (!partials?.length) return '';
-  return `<div class="panel"><h3>${title}</h3><p class="hint">Можно сходить своим составом — договоритесь между собой.</p>
-    ${partials
-      .map((p) => `<div class="list-row"><div class="grow"><b>${esc(p.card.title)}</b><div class="hint">${p.count} из ${p.of}: ${p.likedBy.map((u) => esc(u.name)).join(', ')}</div></div>
-        ${p.card.link ? `<button class="icon-btn" data-act="open" data-url="${esc(p.card.link)}" aria-label="Открыть ссылку">${icon('external')}</button>` : ''}</div>`)
-      .join('')}</div>`;
+/** Фото карточки: в колоде — листаются тапом по краям, в просмотре — свайпом; тап открывает на весь экран. */
+function gallery(c, interactive) {
+  const ph = photosOf(c);
+  if (!ph.length) return media(c);
+  const data = `data-photos="${esc(JSON.stringify(ph))}"`;
+  if (interactive) return `<div class="flip" ${data} data-i="0"><img src="${esc(ph[0])}" alt="">${dots(ph.length)}</div>`;
+  return `<div class="gal-wrap" ${data}><div class="gal">${ph.map((p, i) => `<img src="${esc(p)}" alt="" loading="lazy" data-act="lb" data-i="${i}">`).join('')}</div>${dots(ph.length)}</div>`;
 }
 
-function cardBlock(c, { interactive = false, badges = '' } = {}) {
-  return `<div class="swipe" ${interactive ? 'id="swipe"' : ''}>
-    <div class="media">${media(c)}${badges}</div>
+function bindGalleries() {
+  app.querySelectorAll('.gal-wrap').forEach((w) => {
+    const g = w.querySelector('.gal');
+    const ds = w.querySelectorAll('.dots i');
+    if (!ds.length) return;
+    g.addEventListener('scroll', () => {
+      const i = Math.round(g.scrollLeft / g.clientWidth);
+      ds.forEach((d, k) => d.classList.toggle('on', k === i));
+    }, { passive: true });
+  });
+}
+
+function lightbox(photos, start = 0) {
+  const ov = document.createElement('div');
+  ov.className = 'lb';
+  ov.innerHTML = `<div class="lb-track">${photos.map((p) => `<img src="${esc(p)}" alt="">`).join('')}</div>
+    <div class="lb-top"><span class="lb-count">${start + 1} / ${photos.length}</span><button class="lb-x" aria-label="Закрыть">${icon('x')}</button></div>`;
+  document.body.appendChild(ov);
+  const tr = ov.querySelector('.lb-track');
+  requestAnimationFrame(() => (tr.scrollLeft = start * tr.clientWidth));
+  tr.addEventListener('scroll', () => {
+    ov.querySelector('.lb-count').textContent = `${Math.round(tr.scrollLeft / tr.clientWidth) + 1} / ${photos.length}`;
+  }, { passive: true });
+  ov.querySelector('.lb-x').onclick = () => ov.remove();
+}
+
+function cardFull(c, { interactive = false, badges = '', clamp = false } = {}) {
+  return `<div class="card" ${interactive ? 'id="swipe"' : ''}>
+    <div class="media">${gallery(c, interactive)}${badges}</div>
     ${interactive ? '<span class="stamp yes">Можно</span><span class="stamp no">Нет</span><span class="stamp fire">Очень хочу</span>' : ''}
     <div class="body">
       <h3>${esc(c.title)}</h3>
       <div>${tagsHtml(c.tags)}</div>
       ${facts(c)}
-      ${c.why ? `<p class="why">${esc(c.why)}</p>` : ''}
-      <div class="author">${ava(c.author)}Предложила ${esc(c.author?.name)}</div>
-      ${c.link ? `<button class="textbtn" data-act="open" data-url="${esc(c.link)}" style="justify-content:flex-start;padding:12px 0 0">${icon('external')}Открыть ссылку</button>` : ''}
+      ${c.why ? `<p class="why ${clamp ? 'clamp' : ''}">${esc(c.why)}</p>` : ''}
+      <div class="foot">${ava(c.author)}<span>Предложила ${esc(c.author?.name)}</span>
+        ${c.link ? `<button class="linkbtn" data-act="open" data-url="${esc(c.link)}">Ссылка ${icon('external')}</button>` : ''}</div>
     </div>
   </div>`;
+}
+
+const summary = (c) =>
+  `<button class="summary" data-act="go" data-to="#/card/${c.id}" style="width:100%;text-align:left">
+    <span class="thumb">${media(c)}</span>
+    <span class="grow"><b>${esc(c.title)}</b>${facts(c, true)}</span>
+  </button>`;
+
+function crew(list, doneKey = 'done', verb = 'Отметились') {
+  const done = list.filter((p) => p[doneKey]).length;
+  const pass = list.filter((p) => p.pass).length;
+  const active = list.length - pass;
+  return `<div class="crew"><span class="stack-av">${list.map((p) => ava(p.user, p[doneKey] ? 'done' : p.pass ? 'pass' : '')).join('')}</span>
+    <span>${verb} ${done} из ${active}${pass ? ` · ${pass} ${plural(pass, 'пропускает', 'пропускают', 'пропускают')}` : ''}</span></div>`;
+}
+
+const emptyCard = (ic, title, text, action = '') =>
+  `<div class="empty-card"><div class="ic">${icon(ic)}</div><h3>${title}</h3><p>${text}</p>${action}</div>`;
+
+const tip = (key, html) =>
+  store.get(`tip:${key}`) ? '' : `<div class="note">${icon('info')}<span>${html}</span><button class="x" data-act="tipx" data-k="${key}" aria-label="Скрыть">${icon('x')}</button></div>`;
+
+function partialsHtml(partials, title) {
+  if (!partials?.length) return '';
+  return `<div class="section-title">${title}</div><div class="panel" style="padding-top:6px;padding-bottom:6px">
+    ${partials.map((p) => `<div class="list-row"><div class="grow"><b>${esc(p.card.title)}</b><div class="hint">${p.count} из ${p.of}: ${p.likedBy.map((u) => esc(u.name)).join(', ')}</div></div>
+      ${p.card.link ? `<button class="icon-btn" data-act="open" data-url="${esc(p.card.link)}" aria-label="Открыть ссылку">${icon('external')}</button>` : ''}</div>`).join('')}
+    <p class="hint" style="margin:4px 0 8px">Можно сходить своим составом — договоритесь между собой.</p></div>`;
 }
 
 /* ---------------- роутер ---------------- */
 
 const routes = [
   [/^$/, () => renderWeek(), 'week'],
-  [/^intro$/, () => renderIntro(), 'week'],
+  [/^intro$/, () => renderIntro(true), 'week'],
   [/^settings$/, () => renderSettings(), 'week'],
   [/^cards$/, () => renderCards(), 'cards'],
   [/^card\/new$/, () => renderEditor(null), 'cards'],
@@ -250,22 +320,22 @@ const routes = [
   [/^memories$/, () => renderMemories(), 'memories'],
 ];
 
-function seenIntro() {
-  try {
-    return !!localStorage.getItem('intro-seen');
-  } catch {
-    return true;
-  }
+function setTabs(show) {
+  tabs.hidden = !show;
+  document.body.classList.toggle('notabs', !show);
 }
 
 async function route() {
   const hash = location.hash.replace(/^#\/?/, '');
   if (!ME.member) {
-    tabs.hidden = true;
+    setTabs(false);
     return renderJoin();
   }
-  tabs.hidden = false;
-  if (hash === '' && !seenIntro()) return renderIntro();
+  if (hash === '' && !store.get('intro-seen')) {
+    setTabs(false);
+    return renderIntro(false);
+  }
+  setTabs(true);
   const [re, fn, tab] = routes.find(([r]) => r.test(hash)) || routes[0];
   tabs.querySelectorAll('a').forEach((a) => a.classList.toggle('on', a.dataset.tab === tab));
   if (tg?.BackButton) {
@@ -276,7 +346,7 @@ async function route() {
   try {
     await fn(hash.match(re));
   } catch (e) {
-    view(`<div class="empty">${icon('refresh')}<p>${esc(e.message)}</p><button class="btn soft" data-act="retry">Попробовать ещё раз</button></div>`, {
+    view(emptyCard('refresh', 'Не получилось загрузить', esc(e.message), '<button class="btn secondary" data-act="retry">Попробовать ещё раз</button>'), {
       retry: () => route(),
     });
   }
@@ -286,9 +356,9 @@ async function route() {
 
 function renderJoin() {
   view(
-    `${head('Добро пожаловать', `Привет, ${esc(ME.user.name)}!`)}
-    <p>Здесь подруги вместе выбирают, куда сходить: собирают идеи, раз в неделю голосуют, а приложение подбирает активность и время, удобное всем.</p>
-    <label class="field"><span class="label">Код приглашения</span><input id="code" autocomplete="off" placeholder="Его знают подруги"></label>
+    `${top(`Привет, ${esc(ME.user.name)}!`)}
+    <p class="sub">Здесь подруги вместе выбирают, куда сходить: собирают идеи, раз в неделю голосуют, а приложение подбирает активность и время, удобное всем.</p>
+    <div class="panel"><label class="field"><span class="lbl">Код приглашения</span><input id="code" autocomplete="off" placeholder="Его знают подруги"></label></div>
     <button class="btn" data-act="join">Присоединиться</button>`,
     {
       join: () =>
@@ -302,33 +372,31 @@ function renderJoin() {
   );
 }
 
-function renderIntro() {
-  tabs.hidden = false;
+function renderIntro(fromSettings) {
   const steps = [
-    ['bulb', 'Собираем идеи', 'Каждая добавляет места и события, куда хотелось бы сходить. Быстрее всего — прислать боту ссылку.'],
-    ['heart', 'Голосуем раз в неделю', 'По субботам бот присылает приглашение. Отмечаешь несколько карточек: «очень хочу», «можно» или «нет». Если неделя занята — пропускаешь.'],
-    ['shuffle', 'Приложение выбирает', 'Из того, что подошло всем, выбирается одна активность случайно. Если общего нет — покажем частичные совпадения и быстро довыберем.'],
-    ['calendar', 'Подбираем время', 'Каждая отмечает, когда свободна. Видно, какое время подходит всем, — бронируете, и всем приходит событие для календаря.'],
-    ['camera', 'Сохраняем впечатления', 'После встречи — оценки и фото во вкладке «Были».'],
+    ['bulb', 'Собираем идеи', 'Каждая добавляет места и события. Быстрее всего — отправить боту ссылку в чат.'],
+    ['heart', 'Голосуем раз в неделю', 'По субботам бот зовёт отметить несколько карточек: «очень хочу», «можно» или «нет». Занята — пропускаешь неделю.'],
+    ['shuffle', 'Приложение выбирает', 'Из того, что подошло всем, одна активность выбирается случайно. Нет общего — быстро довыбираем.'],
+    ['calendar', 'Подбираем время', 'Каждая отмечает, когда свободна, — видно время, удобное всем. Бронируете, и всем приходит событие для календаря.'],
+    ['camera', 'Сохраняем впечатления', 'После встречи — оценки и фото во вкладке «Встречи».'],
   ];
   view(
-    `${head('Как это работает', 'Пять шагов')}
-    <div class="panel intro steps">${steps.map(([i, t, d]) => `<div class="step"><span class="dot">${icon(i)}</span><div class="grow"><b>${t}</b><span class="hint">${d}</span></div></div>`).join('')}</div>
-    <div class="note">${icon('joker')} Раз в месяц у каждой есть <b>джокер</b>: если поставить его на карточку и никто не скажет «нет», она выбирается без жребия.</div>
-    <button class="btn" data-act="ok">Понятно</button>`,
+    `${top('Как это работает')}
+    <p class="sub">Пять шагов — и встречи организуются сами.</p>
+    <div class="panel intro" style="padding-top:4px;padding-bottom:4px">${steps.map(([i, t, d]) => `<div class="step"><span class="dot">${icon(i)}</span><div class="grow"><b>${t}</b><span class="hint">${d}</span></div></div>`).join('')}</div>
+    <div class="note">${icon('joker')}<span>Раз в месяц у каждой есть <b>джокер</b>: если поставить его на карточку и никто не скажет «нет», она выбирается без жребия.</span></div>
+    <div class="actionbar"><button class="btn" data-act="ok">${fromSettings ? 'Понятно' : 'Начать'}</button></div>`,
     {
       ok: () => {
-        try {
-          localStorage.setItem('intro-seen', '1');
-        } catch { /* ничего */ }
-        if (location.hash.replace(/^#\/?/, '') === 'intro') location.hash = '#/';
+        store.set('intro-seen', '1');
+        if (fromSettings) history.back();
         else route();
       },
     },
   );
 }
 
-/* ---------------- неделя ---------------- */
+/* ---------------- главная ---------------- */
 
 async function renderWeek() {
   STATE = await api('/api/state');
@@ -343,23 +411,21 @@ function viewIdle() {
   const d = STATE.daysSince;
   const n = STATE.members.length;
   const cards = STATE.cardsCount;
-  const cadence = STATE.cadence === 'weekly' ? 'каждую субботу' : 'по субботам, если вы не виделись больше недели';
   const setup = n < 2 || cards < 5;
+  const cadence = STATE.cadence === 'weekly' ? 'каждую субботу' : 'по субботам, если вы не виделись больше недели';
+  const step = (done, num, title, text, extra = '') =>
+    `<div class="step ${done ? 'done' : ''}"><span class="dot">${done ? icon('check') : num}</span><div class="grow"><b>${title}</b><span class="hint">${text}</span>${extra}</div></div>`;
   view(
-    `${head('Неделя', `Привет, ${esc(ME.user.name)}`, '', true)}
-    <div class="stat">
-      <div class="num">${d === null ? '—' : d}</div>
-      <div class="cap">${d === null ? 'встреч пока не было' : `${plural(d, 'день', 'дня', 'дней')} без встречи`}</div>
-      ${STATE.nextMeeting ? `<p style="margin-top:12px">Следующая встреча: <b>${esc(STATE.nextMeeting.human)}</b></p>` : ''}
-    </div>
-    ${setup ? `<div class="panel"><h3>С чего начать</h3><div class="steps">
-      <div class="step ${n >= 2 ? 'done' : ''}"><span class="dot">${n >= 2 ? icon('check') : 1}</span><div class="grow"><b>Позовите подруг</b><span class="hint">Сейчас в компании ${n}. Пусть откроют бота и пришлют код приглашения.</span></div></div>
-      <div class="step ${cards >= 5 ? 'done' : ''}"><span class="dot">${cards >= 5 ? icon('check') : 2}</span><div class="grow"><b>Добавьте идеи</b><span class="hint">Сейчас ${cards}. Чтобы выбор был интересным, нужно хотя бы 5–10.</span>
-        ${cards < 5 ? `<button class="textbtn" data-act="go" data-to="#/card/new" style="justify-content:flex-start;padding:8px 0 0">${icon('plus')}Добавить идею</button>` : ''}</div></div>
-      <div class="step"><span class="dot">3</span><div class="grow"><b>Начните голосование</b><span class="hint">Кнопкой ниже или дождитесь субботы.</span></div></div>
-    </div></div>` : ''}
-    <p class="hint" style="margin:14px 2px">Бот сам присылает приглашение проголосовать ${cadence}. Можно начать и сейчас.</p>
-    <button class="btn" data-act="start">${icon('shuffle')}Начать голосование</button>`,
+    `${top(`Привет, ${esc(ME.user.name)}`, settingsBtn)}
+    ${STATE.nextMeeting ? `<div class="hero"><div class="hint">Следующая встреча</div><h3 style="margin-top:4px">${esc(STATE.nextMeeting.human)}</h3></div>` : ''}
+    ${d !== null ? `<div class="hero"><div class="big">${d}</div><div class="cap">${plural(d, 'день', 'дня', 'дней')} без встречи</div></div>` : ''}
+    ${setup ? `<div class="section-title">С чего начать</div><div class="panel" style="padding-top:4px;padding-bottom:4px">
+      ${step(n >= 2, 1, 'Позовите подруг', `Сейчас в компании ${n}. Пусть откроют бота и отправят код приглашения.`)}
+      ${step(cards >= 5, 2, 'Добавьте идеи', `Сейчас ${cards}. Для интересного выбора нужно хотя бы 5–10.`, cards < 5 ? `<button class="btn small secondary" data-act="go" data-to="#/card/new" style="margin-top:10px">${icon('plus')}Добавить идею</button>` : '')}
+      ${step(false, 3, 'Начните голосование', 'Кнопкой ниже — или дождитесь субботы.')}
+    </div>` : ''}
+    <div class="actionbar"><button class="btn" data-act="start">Начать голосование</button>
+      <p class="hint" style="text-align:center;margin:8px 0 0">Бот сам зовёт голосовать ${cadence}</p></div>`,
     {
       start: () =>
         act(async () => {
@@ -374,15 +440,15 @@ function viewIdle() {
 
 async function viewVoting(r) {
   const stage2 = r.stage === 2;
-  const top = `${head(stage2 ? 'Довыбор' : 'Голосование', stage2 ? 'Найдём то, что подойдёт всем' : 'Куда идём на этой неделе?', `До ${fmtTs(r.deadline)}`, true)}
-    ${people(r.progress)}
-    ${stage2 ? `<div class="note">Полного совпадения пока нет. Посмотри карточки, которые понравились подругам, — так быстрее найдём общий вариант.</div>${partialsHtml(r.partials, 'Совпало у части из вас')}` : ''}`;
+  const head = `${top(stage2 ? 'Довыбор' : 'Голосование', settingsBtn)}
+    <p class="sub">До ${fmtTs(r.deadline)}</p>
+    ${crew(r.progress)}
+    ${stage2 ? `<div class="note">${icon('info')}<span><b>Полного совпадения пока нет.</b> Оцени карточки, которые понравились подругам, — так быстрее найдём общий вариант.</span></div>` : ''}`;
+  const partials = stage2 ? partialsHtml(r.partials, 'Совпало у части из вас') : '';
 
   if (r.me.pass) {
     return view(
-      `${top}<div class="panel" style="text-align:center;padding:28px 18px">${icon('moon')}<h3 style="margin-top:10px">Ты пропускаешь эту неделю</h3>
-        <p class="hint">Подруги выберут без тебя. Время ты всё равно сможешь отметить, если получится присоединиться.</p></div>
-       <button class="btn soft" data-act="unpass">Всё-таки участвую</button>`,
+      `${head}${emptyCard('moon', 'Ты пропускаешь эту неделю', 'Подруги выберут без тебя. Время ты всё равно сможешь отметить, если получится присоединиться.', '<button class="btn secondary" data-act="unpass">Всё-таки участвую</button>')}`,
       {
         unpass: () => act(async () => {
           await api('/api/round/mood', { method: 'POST', body: { moods: r.me.moods, pass: false } });
@@ -391,29 +457,29 @@ async function viewVoting(r) {
       },
     );
   }
-  if (!r.me.moodSet && !stage2) return viewMood(top, r);
+  if (!r.me.moodSet && !stage2) return viewMood(head, r);
   if (r.me.done && !moreMode) {
     const waiting = r.progress.filter((p) => !p.done && !p.pass).map((p) => p.user.name);
     return view(
-      `${top}<div class="panel" style="text-align:center;padding:28px 18px"><span style="color:var(--yes)">${icon('check')}</span><h3 style="margin-top:10px">Готово, твой голос учтён</h3>
-        <p class="hint">${waiting.length ? `Ждём: ${waiting.map(esc).join(', ')}. Когда все отметятся, бот выберет активность и пришлёт уведомление.` : 'Подводим итоги…'}</p></div>
-       <button class="textbtn" data-act="more">Посмотреть ещё карточки</button>`,
+      `${head}${emptyCard('check', 'Твой голос учтён',
+        waiting.length ? `Ждём: ${waiting.map(esc).join(', ')}. Когда все отметятся, бот выберет активность и пришлёт уведомление.` : 'Подводим итоги…',
+        '<button class="btn secondary" data-act="more">Посмотреть ещё карточки</button>')}${partials}`,
       { more: () => { moreMode = true; renderWeek(); } },
     );
   }
-  return viewDeck(top, r);
+  return viewDeck(head, partials, r);
 }
 
-function viewMood(top, r) {
+function viewMood(head, r) {
   const sel = new Set(r.me.moods);
   view(
-    `${top}
-    <h2>Чего хочется на этой неделе?</h2>
-    <p class="hint" style="margin-bottom:14px">Выбери одно или несколько — карточки подстроятся. Можно ничего не выбирать.</p>
+    `${head}
+    <div class="section-title">Чего хочется на этой неделе?</div>
     <div class="chips">${Object.entries(DICT.moods).map(([k, v]) => `<button class="chip ${sel.has(k) ? 'on' : ''}" data-act="mood" data-k="${k}">${esc(v)}</button>`).join('')}</div>
-    <div class="stack" style="margin-top:24px">
+    <p class="hint" style="margin-top:12px">Можно выбрать несколько или ничего — карточки просто подстроятся.</p>
+    <div class="actionbar">
       <button class="btn" data-act="go-on">Смотреть карточки</button>
-      <button class="textbtn muted" data-act="pass">${icon('moon')}Пропускаю эту неделю</button>
+      <button class="textbtn" data-act="pass">${icon('moon')}На этой неделе пропускаю</button>
     </div>`,
     {
       mood: (el) => {
@@ -437,49 +503,48 @@ function viewMood(top, r) {
   );
 }
 
-async function viewDeck(top, r) {
+async function viewDeck(head, partials, r) {
   const { next } = await api('/api/round/next');
   if (!next) {
     return view(
-      `${top}<div class="empty">${icon('bulb')}<h3>Карточки закончились</h3>
-        <p>${r.me.likes ? 'Ты посмотрела всё, что есть.' : 'Ничего не подошло? Добавь свою идею — она сразу попадёт в голосование.'}</p></div>
-       <div class="stack"><button class="btn soft" data-act="go" data-to="#/card/new">${icon('plus')}Добавить идею</button>
-       ${r.me.likes ? '<button class="btn" data-act="done">Готово</button>' : ''}</div>`,
+      `${head}${emptyCard('bulb', 'Карточки закончились',
+        r.me.likes ? 'Ты посмотрела всё, что есть.' : 'Ничего не подошло? Добавь свою идею — она сразу попадёт в голосование.',
+        `<div class="stack"><button class="btn secondary" data-act="go" data-to="#/card/new">${icon('plus')}Добавить идею</button>${r.me.likes ? '<button class="btn" data-act="done">Готово</button>' : ''}</div>`)}${partials}`,
       { done: doneVoting },
     );
   }
   const c = next.card;
   const target = STATE.likesTarget;
-  const pct = Math.min(100, (r.me.likes / target) * 100);
   const badges =
     (next.likedBy.length ? `<span class="badge left">${icon('heart')}${next.likedBy.map((u) => esc(u.name)).join(', ')}</span>` : '') +
     (next.expiresInDays !== null ? `<span class="badge right">${icon('hourglass')}${next.expiresInDays <= 0 ? 'последний день' : `ещё ${next.expiresInDays} дн.`}</span>` : '');
-  const joker =
-    r.me.jokerCardId === c.id
-      ? `<p class="hint" style="text-align:center">${icon('joker')} На этой карточке твой джокер</p>`
-      : STATE.jokerAvailable && !r.me.jokerCardId
-        ? `<button class="textbtn" data-act="joker">${icon('joker')}Джокер: хочу именно это</button>`
-        : '';
+  const seenSwipes = Number(store.get('swipes', '0'));
+  const extras = [];
+  if (r.me.jokerCardId === c.id) extras.push(`<span class="hint" style="padding:12px">${icon('joker')} Здесь твой джокер</span>`);
+  else if (STATE.jokerAvailable && !r.me.jokerCardId) extras.push(`<button class="textbtn" data-act="joker">${icon('joker')}Джокер</button>`);
+  if (r.me.likes >= 1 && !r.me.done) extras.push(`<button class="textbtn" data-act="done">${icon('check')}Закончить</button>`);
+  if (moreMode) extras.push('<button class="textbtn" data-act="stop">Вернуться</button>');
+
   view(
-    `${top}
-    <div class="meter"><span>${r.stage === 2 ? `Карточек от подруг: ${next.finalistsLeft}` : `Отмечено: ${r.me.likes} из ${target}`}</span><span>${r.me.votes} просмотрено</span></div>
-    ${r.stage === 1 ? `<div class="progress"><i style="width:${pct}%"></i></div>` : ''}
-    <div class="deck">${cardBlock(c, { interactive: true, badges })}</div>
+    `${head}
+    <div class="meter">${r.stage === 1
+      ? `<span>Хочу: ${Math.min(r.me.likes, target)} из ${target}</span><span class="segs">${Array.from({ length: target }, (_, i) => `<i class="${i < r.me.likes ? 'on' : ''}"></i>`).join('')}</span>`
+      : `<span>Карточек от подруг: ${next.finalistsLeft}</span>`}</div>
+    <div class="deck">${cardFull(c, { interactive: true, badges, clamp: true })}</div>
     <div class="votebar">
       <button class="vote no" data-act="v" data-v="-1"><span class="circle">${icon('x')}</span>Нет</button>
       <button class="vote yes" data-act="v" data-v="1"><span class="circle">${icon('check')}</span>Можно</button>
       <button class="vote fire" data-act="v" data-v="2"><span class="circle">${icon('flame')}</span>Очень хочу</button>
     </div>
-    <p class="swipe-hint">Можно свайпать: вправо — можно, влево — нет, вверх — очень хочу</p>
-    ${joker}
-    ${r.me.likes >= 1 && !r.me.done ? '<button class="textbtn muted" data-act="done">Достаточно, закончить</button>' : ''}
-    ${moreMode ? '<button class="textbtn muted" data-act="stop">Вернуться</button>' : ''}`,
+    ${seenSwipes < 3 ? '<p class="swipe-hint">Можно свайпать: вправо — можно, влево — нет, вверх — очень хочу</p>' : ''}
+    ${extras.length ? `<div class="under">${extras.join('')}</div>` : ''}
+    ${partials}`,
     {
       v: (el) => castVote(c.id, Number(el.dataset.v)),
       done: doneVoting,
       stop: () => { moreMode = false; renderWeek(); },
       joker: async () => {
-        if (!(await ask(`Поставить джокер на «${c.title}»? Если никто не скажет «нет», выберем её без жребия. Джокер — один раз в месяц.`))) return;
+        if (!(await ask(`Поставить джокер на «${c.title}»? Если никто не скажет «нет», она будет выбрана без жребия. Джокер — один раз в месяц.`))) return;
         act(async () => {
           await api('/api/round/joker', { method: 'POST', body: { cardId: c.id } });
           success();
@@ -495,6 +560,7 @@ let voting = false;
 async function castVote(cardId, value) {
   if (voting) return;
   voting = true;
+  store.set('swipes', String(Number(store.get('swipes', '0')) + 1));
   haptic(value === 2 ? 'heavy' : 'light');
   const el = document.getElementById('swipe');
   if (el) {
@@ -503,9 +569,8 @@ async function castVote(cardId, value) {
   }
   await act(() => api('/api/round/vote', { method: 'POST', body: { cardId, value } }));
   voting = false;
-  const y = window.scrollY;
   await renderWeek().catch((e) => toast(e.message));
-  window.scrollTo(0, Math.min(y, 200));
+  window.scrollTo(0, 0);
 }
 
 function doneVoting() {
@@ -519,10 +584,26 @@ function doneVoting() {
 
 function setupSwipe(el, onVote) {
   if (!el) return;
-  let sx = 0, sy = 0, dx = 0, dy = 0, active = false;
+  let sx = 0, sy = 0, dx = 0, dy = 0, active = false, downTarget = null;
   const stamps = { yes: el.querySelector('.stamp.yes'), no: el.querySelector('.stamp.no'), fire: el.querySelector('.stamp.fire') };
+  const flip = el.querySelector('.flip');
+  // Тап по фото: левая треть — назад, правая — вперёд, середина — на весь экран
+  const tapPhoto = (clientX) => {
+    const ph = JSON.parse(flip.dataset.photos);
+    let i = Number(flip.dataset.i);
+    const r = flip.getBoundingClientRect();
+    const x = (clientX - r.left) / r.width;
+    if (ph.length > 1 && x < 0.33) i = (i - 1 + ph.length) % ph.length;
+    else if (ph.length > 1 && x > 0.67) i = (i + 1) % ph.length;
+    else return lightbox(ph, i);
+    flip.dataset.i = i;
+    flip.querySelector('img').src = ph[i];
+    flip.querySelectorAll('.dots i').forEach((d, k) => d.classList.toggle('on', k === i));
+    haptic();
+  };
   el.addEventListener('pointerdown', (e) => {
     if (e.target.closest('button')) return;
+    downTarget = e.target;
     active = true;
     sx = e.clientX; sy = e.clientY; dx = dy = 0;
     el.classList.add('dragging');
@@ -536,10 +617,14 @@ function setupSwipe(el, onVote) {
     stamps.no.style.opacity = Math.max(0, -dx / 100);
     stamps.fire.style.opacity = Math.abs(dx) < 60 ? Math.max(0, -dy / 100) : 0;
   });
-  const end = () => {
+  const end = (e) => {
     if (!active) return;
     active = false;
     el.classList.remove('dragging');
+    if (Math.abs(dx) < 6 && Math.abs(dy) < 6 && flip && flip.contains(downTarget) && e?.type === 'pointerup') {
+      el.style.transform = '';
+      return tapPhoto(e.clientX);
+    }
     if (dx > 110) return onVote(1);
     if (dx < -110) return onVote(-1);
     if (dy < -120 && Math.abs(dx) < 60) return onVote(2);
@@ -554,17 +639,15 @@ function setupSwipe(el, onVote) {
 
 function showReveal(r) {
   const key = `revealed:${r.id}:${r.card.id}`;
-  try {
-    if (localStorage.getItem(key)) return;
-    localStorage.setItem(key, '1');
-  } catch { /* без localStorage просто покажем ещё раз */ }
+  if (store.get(key)) return;
+  store.set(key, '1');
   const ov = document.createElement('div');
   ov.className = 'reveal';
   ov.innerHTML = '<div class="spinner"><i></i><i></i><i></i></div>';
   document.body.appendChild(ov);
   haptic('medium');
   setTimeout(() => {
-    ov.innerHTML = `<div class="result"><div class="label">Выбрано</div><h1>${esc(r.card.title)}</h1><button class="btn" style="width:auto;padding:0 32px;margin:0 auto">Дальше</button></div>`;
+    ov.innerHTML = `<div class="result"><div class="hint">Выбрано</div><h1>${esc(r.card.title)}</h1><button class="btn" style="width:auto;padding:0 36px;margin:0 auto">Дальше</button></div>`;
     success();
     ov.onclick = () => ov.remove();
   }, 1400);
@@ -594,11 +677,11 @@ function viewScheduling(r) {
     if (s.fixed) {
       const on = sel.has(s.fixed);
       const n = (others[s.fixed] || 0) + (on ? 1 : 0);
-      return `<div class="panel"><div class="label">Время фиксированное</div><h3 style="margin-top:6px">${dayLabel(s.fixed.slice(0, 10), true)}, ${s.fixed.slice(11)}</h3>
+      return `<div class="panel"><div class="hint">Время фиксированное</div><h3 style="margin-top:4px">${dayLabel(s.fixed.slice(0, 10), true)}, ${s.fixed.slice(11)}</h3>
         <p class="hint">${wx(s.fixed.slice(0, 10))} · смогут ${n} из ${s.total}</p>
-        <button class="btn ${on ? '' : 'soft'}" data-act="cell" data-k="${s.fixed}" style="margin-top:10px">${on ? `${icon('check')}Я смогу` : 'Я смогу'}</button></div>`;
+        <button class="btn ${on ? '' : 'secondary'}" data-act="cell" data-k="${s.fixed}" style="margin-top:10px">${on ? `${icon('check')}Я смогу` : 'Я смогу'}</button></div>`;
     }
-    if (!s.keys.length) return '<div class="panel">Свободных дат уже не осталось. Можно выбрать другую активность.</div>';
+    if (!s.keys.length) return emptyCard('calendar', 'Свободных дат не осталось', 'Можно выбрать другую активность — кнопка внизу.');
     return `<div class="grid-wrap"><table class="grid"><tr><th></th>${s.blocks.map((b) => `<th>${b.label}<small>${b.range}</small></th>`).join('')}</tr>
       ${s.days.map((d) => `<tr><td class="day ${isWeekend(d) ? 'we' : ''}">${dayLabel(d)}<small>${wx(d)}</small></td>${s.blocks.map((b) => {
         const k = `${d}@${b.h}`;
@@ -607,28 +690,38 @@ function viewScheduling(r) {
         const n = (others[k] || 0) + (mine ? 1 : 0);
         return `<td><button class="cell ${mine ? 'mine' : ''} ${n === s.total ? 'full' : ''}" style="--heat:${n / s.total}" data-act="cell" data-k="${k}">${n || ''}</button></td>`;
       }).join('')}</tr>`).join('')}</table>
-      <div class="legend"><span><i class="mine"></i>ты свободна</span><span><i class="full"></i>свободны все</span><span>цифра — сколько свободны</span></div></div>`;
+      <div class="legend"><span><i class="mine"></i>ты свободна</span><span><i class="full"></i>свободны все</span><span>цифра — сколько могут</span></div></div>`;
   };
 
+  const slotParts = (slot) => {
+    const [d, t] = slot.split('@');
+    const b = DICT.blocks.find((x) => x.h === t);
+    return { day: dayLabel(d, true), time: b ? `${b.label}, ${b.range}` : t };
+  };
   const rankingHtml = () => {
-    if (!s.ranking.length) return '';
-    return `<h2>Лучшее время</h2><div class="panel">${s.ranking.map((x) => `<div class="list-row"><div class="grow"><b>${esc(x.human)}</b>
-      <div class="hint">${x.count === s.total ? 'Свободны все' : `Свободны ${x.count} из ${s.total}`}: ${x.users.map((u) => esc(nameOf(u))).join(', ')}</div></div>
-      <button class="btn small" data-act="book" data-k="${x.slot}">Бронируем</button></div>`).join('')}</div>`;
+    const best = s.ranking.filter((x) => x.count >= Math.min(2, s.total));
+    if (!best.length) return '';
+    return `<div class="section-title">Лучшее время</div><div class="panel" style="padding-top:4px;padding-bottom:4px">${best.map((x) => {
+      const { day, time } = slotParts(x.slot);
+      const missing = STATE.members.filter((m) => !x.users.includes(m.id)).map((m) => esc(m.name));
+      return `<div class="list-row"><div class="grow"><b>${day}</b><div class="hint">${time}</div>
+        <div class="hint" style="color:${x.count === s.total ? 'var(--yes)' : 'var(--hint)'}">${x.count === s.total ? 'Свободны все' : `Не могут: ${missing.join(', ')}`}</div></div>
+        <button class="btn small" data-act="book" data-k="${x.slot}">Бронируем</button></div>`;
+    }).join('')}</div>`;
   };
 
   const draw = () =>
     view(
-      `${head('Результат', esc(r.card.title), REASON[r.reason] + (r.reason === 'joker' && r.jokerBy ? ` Джокер: ${esc(r.jokerBy.name)}.` : ''), true)}
-      ${cardBlock(r.card)}
-      ${partialsHtml(r.partials, 'Ещё совпадения')}
-      <h2>Когда ты свободна?</h2>
-      <p class="hint" style="margin-bottom:12px">Отметь все варианты, когда можешь. ${r.me.slotsDone ? '' : '<b style="color:var(--text)">Ты ещё не отмечала.</b>'}</p>
+      `${top('Выбрано', settingsBtn)}
+      ${summary(r.card)}
+      <p class="hint" style="margin:0 2px">${REASON[r.reason]}${r.reason === 'joker' && r.jokerBy ? ` Джокер: ${esc(r.jokerBy.name)}.` : ''}</p>
+      <div class="section-title">Когда ты свободна?</div>
+      ${crew(r.progress.map((p) => ({ ...p, pass: false })), 'slotsDone', 'Отметили время')}
       ${gridHtml()}
-      <div class="savebar"><button class="btn" data-act="save" ${dirty || !r.me.slotsDone ? '' : 'disabled'}>${r.me.slotsDone ? (dirty ? 'Сохранить изменения' : 'Сохранено') : 'Сохранить'}</button></div>
-      <h2>Кто отметил время</h2>${people(r.progress.map((p) => ({ ...p, done: p.slotsDone, pass: false })))}
+      ${dirty || !r.me.slotsDone ? `<div class="actionbar"><button class="btn" data-act="save">${r.me.slotsDone ? 'Сохранить изменения' : 'Сохранить моё время'}</button></div>` : ''}
       ${rankingHtml()}
-      <button class="textbtn danger" data-act="reroll" style="margin-top:12px">${icon('refresh')}Это сейчас не подходит — выбрать другое</button>`,
+      ${partialsHtml(r.partials, 'Ещё совпало')}
+      <button class="textbtn danger" data-act="reroll" style="margin-top:8px">${icon('refresh')}Не подходит — выбрать другое</button>`,
       {
         cell: (el) => {
           const k = el.dataset.k;
@@ -642,7 +735,7 @@ function viewScheduling(r) {
         save: () => act(async () => {
           await api('/api/round/slots', { method: 'POST', body: { slots: [...sel] } });
           success();
-          toast('Сохранено');
+          toast('Время сохранено');
           const y = window.scrollY;
           await renderWeek();
           window.scrollTo(0, y);
@@ -677,15 +770,16 @@ function viewBooked(r) {
   if (w) info.push(`<span>${icon('sun')}${w.tmax}°${w.rain !== null ? `, осадки ${w.rain}%` : ''}</span>`);
   if (r.booker) info.push(`<span>${icon('ticket')}Бронирует ${esc(r.booker.name)}</span>`);
   view(
-    `${head('Встреча назначена', esc(r.slotHuman), '', true)}
-    ${info.length ? `<div class="facts" style="margin-top:-8px">${info.join('')}</div>` : ''}
-    ${cardBlock(r.card)}
-    <div class="note">Бот прислал каждой файл <b>vstrecha.ics</b> — открой его в чате, чтобы добавить встречу в календарь. Накануне придёт напоминание.</div>
-    ${partialsHtml(r.partials, 'Ещё совпадения на будущее')}
-    <button class="textbtn danger" data-act="unbook">Отменить бронь и выбрать другое время</button>`,
+    `${top('Встреча назначена', settingsBtn)}
+    <div class="hero"><div class="hint">Когда</div><h3 style="font-size:22px;margin:4px 0 0">${esc(r.slotHuman)}</h3>
+      ${info.length ? `<div class="facts" style="margin-bottom:0">${info.join('')}</div>` : ''}</div>
+    ${summary(r.card)}
+    <div class="note">${icon('calendar')}<span>Бот отправил каждой файл <b>vstrecha.ics</b> — нажми на него в чате, чтобы добавить встречу в календарь. Накануне придёт напоминание.</span></div>
+    ${partialsHtml(r.partials, 'Ещё совпало — на будущее')}
+    <button class="textbtn danger" data-act="unbook">Отменить бронь</button>`,
     {
       unbook: async () => {
-        if (!(await ask('Отменить бронь? Всем придёт уведомление.'))) return;
+        if (!(await ask('Отменить бронь и выбрать другое время? Всем придёт уведомление.'))) return;
         act(async () => {
           await api('/api/round/unbook', { method: 'POST' });
           renderWeek();
@@ -698,22 +792,28 @@ function viewBooked(r) {
 /* ---------------- идеи ---------------- */
 
 async function renderCards() {
-  const { cards, drafts } = await api(`/api/cards?status=${cardsTab}`);
+  const { cards, drafts, counts } = await api(`/api/cards?status=${cardsTab}`);
+  if (cardsTab === 'visited' && !counts.visited) cardsTab = 'active';
   const list = cardsFilter ? cards.filter((c) => c.tags.includes(cardsFilter)) : cards;
+  const addBtn = `<button class="btn small secondary" data-act="go" data-to="#/card/new">${icon('plus')}Добавить</button>`;
+  const usedTags = new Set(cards.flatMap((c) => c.tags));
+  const showFilters = cardsTab === 'active' && cards.length >= 6;
+  const empty = cardsTab === 'active' && !cards.length;
+
   view(
-    `${head('Идеи', 'Куда хочется', cardsTab === 'active' ? `${cards.length} ${plural(cards.length, 'идея', 'идеи', 'идей')} в общем списке` : 'Места, где вы уже были')}
-    <div class="seg">
-      <button class="${cardsTab === 'active' ? 'on' : ''}" data-act="tab" data-v="active">Все идеи</button>
-      <button class="${cardsTab === 'visited' ? 'on' : ''}" data-act="tab" data-v="visited">Уже были</button>
-    </div>
-    <div class="chips scroll" style="margin-top:12px">${Object.entries(DICT.tags).map(([k, v]) => `<button class="chip ${cardsFilter === k ? 'on' : ''}" data-act="filter" data-k="${k}">${esc(v)}</button>`).join('')}</div>
-    ${drafts.length ? `<div class="panel"><h3>Твои черновики</h3><p class="hint">Допиши — и они попадут в общий список.</p>${drafts.map((d) => `<div class="list-row"><div class="grow">${esc(d.title || 'Без названия')}</div><button class="btn small soft" data-act="go" data-to="#/card/${d.id}/edit">Дописать</button></div>`).join('')}</div>` : ''}
-    ${list.length ? `<div class="tiles">${list.map((c) => `<button class="tile" data-act="go" data-to="#/card/${c.id}">${media(c)}<div class="t">${esc(c.title)}<small>${BUDGET[c.budget]} · ${esc(c.author?.name)}</small></div></button>`).join('')}</div>`
-      : `<div class="empty">${icon('bulb')}<p>${cardsTab === 'active' ? (cardsFilter ? 'В этой категории пока ничего нет.' : 'Пока пусто. Добавь первую идею — или пришли боту ссылку, он сам сделает карточку.') : 'Здесь появятся места, где вы уже были.'}</p></div>`}
-    <p class="hint" style="text-align:center;margin-top:20px">${icon('link')} Чтобы быстро добавить идею, пришли боту ссылку</p>
-    <button class="btn fab" data-act="go" data-to="#/card/new">${icon('plus')}Идея</button>`,
+    `${top('Идеи', empty ? '' : addBtn)}
+    <p class="sub">${counts.active ? `${counts.active} ${plural(counts.active, 'идея', 'идеи', 'идей')} в общем списке` : 'Места и события, куда хочется сходить'}</p>
+    ${counts.visited ? `<div class="seg"><button class="${cardsTab === 'active' ? 'on' : ''}" data-act="tab" data-v="active">Все</button><button class="${cardsTab === 'visited' ? 'on' : ''}" data-act="tab" data-v="visited">Уже были · ${counts.visited}</button></div>` : ''}
+    ${!empty ? tip('botlink', 'Быстрый способ добавить идею — отправь боту ссылку в чат, он сам заполнит карточку.') : ''}
+    ${showFilters ? `<div class="chips scroll">${Object.entries(DICT.tags).filter(([k]) => usedTags.has(k)).map(([k, v]) => `<button class="chip ${cardsFilter === k ? 'on' : ''}" data-act="filter" data-k="${k}">${esc(v)}</button>`).join('')}</div>` : ''}
+    ${drafts.length ? `<div class="section-title">Твои черновики</div><div class="panel" style="padding-top:4px;padding-bottom:4px">${drafts.map((d) => `<div class="list-row"><div class="grow">${esc(d.title || 'Без названия')}</div><button class="btn small secondary" data-act="go" data-to="#/card/${d.id}/edit">Дописать</button></div>`).join('')}</div>` : ''}
+    ${empty
+      ? emptyCard('bulb', 'Пока нет ни одной идеи', 'Добавь место или событие, куда хочется сходить. Ещё можно просто отправить боту ссылку в чат — он сам создаст карточку.', '<button class="btn" data-act="go" data-to="#/card/new">Добавить идею</button>')
+      : list.length
+        ? `<div class="tiles">${list.map((c) => `<button class="tile" data-act="go" data-to="#/card/${c.id}">${media(c)}<div class="t">${esc(c.title)}<small>${BUDGET[c.budget]} · ${esc(c.author?.name)}</small></div></button>`).join('')}</div>`
+        : `<p class="hint" style="text-align:center;margin:32px 0">${cardsTab === 'visited' ? 'Здесь появятся места, где вы уже были.' : 'В этой категории пока ничего нет.'}</p>`}`,
     {
-      tab: (el) => { cardsTab = el.dataset.v; renderCards(); },
+      tab: (el) => { cardsTab = el.dataset.v; cardsFilter = null; renderCards(); },
       filter: (el) => { cardsFilter = cardsFilter === el.dataset.k ? null : el.dataset.k; renderCards(); },
     },
   );
@@ -722,11 +822,11 @@ async function renderCards() {
 async function renderCard(id) {
   const { card: c } = await api(`/api/cards/${id}`);
   view(
-    `<div style="height:8px"></div>${cardBlock(c)}
-    <div class="stack" style="margin-top:14px">
-      <button class="btn secondary" data-act="go" data-to="#/card/${c.id}/edit">Редактировать</button>
-      ${c.status === 'visited' ? '<button class="btn" data-act="restore">Хотим ещё раз — вернуть в идеи</button>' : ''}
-    </div>`,
+    `<div style="height:8px"></div>${cardFull(c)}
+    <div class="actionbar"><div class="row">
+      <button class="btn secondary" data-act="go" data-to="#/card/${c.id}/edit">${icon('edit')}Изменить</button>
+      ${c.status === 'visited' ? '<button class="btn" data-act="restore">Хотим ещё раз</button>' : ''}
+    </div></div>`,
     {
       restore: () => act(async () => {
         await api(`/api/cards/${c.id}/restore`, { method: 'POST' });
@@ -763,44 +863,75 @@ async function renderEditor(id) {
   const c = id
     ? (await api(`/api/cards/${id}`)).card
     : { title: '', why: '', link: '', photo: '', tags: [], budget: 1, duration: 'short', time_of_day: [], area: '', outdoor: false, needs_booking: false, available_until: null, fixed_at: null, status: 'new' };
-  const f = { ...c, tags: new Set(c.tags), time_of_day: new Set(c.time_of_day) };
+  const f = { ...c, tags: new Set(c.tags), time_of_day: new Set(c.time_of_day), photos: [...photosOf(c)] };
   const isMine = !id || c.author_id === ME.user.id;
-  const photoInner = () => (f.photo ? `<img src="${esc(f.photo)}" alt="">` : `<span class="empty-ph">${icon('camera')}Добавить фото</span>`);
-
-  const seg = (name, options, cur) =>
-    `<div class="seg">${options.map(([v, label]) => `<button class="${String(cur) === String(v) ? 'on' : ''}" data-act="seg" data-name="${name}" data-v="${v}">${label}</button>`).join('')}</div>`;
+  const MAX_PHOTOS = 10;
+  const stripHtml = () =>
+    f.photos.map((p, i) => `<div class="pthumb" data-photos="${esc(JSON.stringify(f.photos))}">
+        <img src="${esc(p)}" alt="" data-act="lb" data-i="${i}">
+        ${i === 0 ? '<span class="pcover">Обложка</span>' : `<button class="pmake" data-act="pcover" data-i="${i}">Сделать обложкой</button>`}
+        <button class="pdel" data-act="pdel" data-i="${i}" aria-label="Удалить фото">${icon('x')}</button>
+      </div>`).join('') +
+    (f.photos.length < MAX_PHOTOS ? `<label class="padd">${icon('plus')}<span>${f.photos.length ? 'Ещё' : 'Добавить фото'}</span><input type="file" accept="image/*" multiple id="photoInput"></label>` : '');
+  const drawStrip = () => {
+    document.getElementById('pstrip').innerHTML = stripHtml();
+    const inp = document.getElementById('photoInput');
+    if (!inp) return;
+    inp.addEventListener('change', async () => {
+      const files = [...inp.files].slice(0, MAX_PHOTOS - f.photos.length);
+      if (!files.length) return;
+      toast(files.length > 1 ? `Загружаю ${files.length} фото…` : 'Загружаю фото…');
+      for (const file of files) await act(async () => f.photos.push((await uploadImage(file)).path));
+      drawStrip();
+    });
+  };
+  const one = (name, options, cur) =>
+    `<div class="chips">${options.map(([v, label]) => `<button class="chip ${String(cur) === String(v) ? 'on' : ''}" data-act="one" data-name="${name}" data-v="${v}">${label}</button>`).join('')}</div>`;
+  const many = (act, options, set) =>
+    `<div class="chips">${options.map(([k, label]) => `<button class="chip ${set.has(k) ? 'on' : ''}" data-act="${act}" data-k="${k}">${esc(label)}</button>`).join('')}</div>`;
 
   view(
-    `${head(c.status === 'draft' ? 'Черновик' : id ? 'Редактирование' : 'Новая идея', c.status === 'draft' ? 'Допиши карточку' : id ? esc(c.title) : 'Куда сходим?')}
-    <label class="field"><span class="label">Ссылка</span><div class="row"><input id="link" class="grow" type="url" inputmode="url" placeholder="https://…" value="${esc(f.link)}"><button class="btn small soft" data-act="preview">Заполнить</button></div>
-      <span class="hint" style="display:block;margin-top:6px">Вставь ссылку и нажми «Заполнить» — название и картинка подтянутся сами.</span></label>
-    <div class="field"><span class="label">Фото</span><div class="photo-pick" id="photoBox"><span id="photoInner">${photoInner()}</span><input type="file" accept="image/*" id="photoInput"></div></div>
-    <label class="field"><span class="label">Название *</span><input id="title" maxlength="140" placeholder="Например, иммерсивный спектакль" value="${esc(f.title)}"></label>
-    <label class="field"><span class="label">Почему стоит сходить</span><textarea id="why" maxlength="1500" placeholder="Пара слов: что там интересного">${esc(f.why)}</textarea></label>
-    <div class="field"><span class="label">Категория</span><div class="chips">${Object.entries(DICT.tags).map(([k, v]) => `<button class="chip ${f.tags.has(k) ? 'on' : ''}" data-act="tag" data-k="${k}">${esc(v)}</button>`).join('')}</div></div>
-    <div class="field"><span class="label">Бюджет на человека</span>${seg('budget', BUDGET.map((b, i) => [i, b]), f.budget)}</div>
-    <div class="field"><span class="label">Сколько займёт</span>${seg('duration', Object.entries(DURATION), f.duration)}</div>
-    <div class="field"><span class="label">Когда подходит</span><div class="chips">${DICT.blocks.map((b) => `<button class="chip ${f.time_of_day.has(b.key) ? 'on' : ''}" data-act="tod" data-k="${b.key}">${b.label}, ${b.range}</button>`).join('')}</div>
-      <span class="hint" style="display:block;margin-top:6px">Если ничего не выбрать — подходит любое время.</span></div>
-    <label class="field"><span class="label">Где</span><input id="area" maxlength="120" placeholder="Район, адрес или метро" value="${esc(f.area)}"></label>
-    <div class="panel flush">
+    `${top(c.status === 'draft' ? 'Допиши карточку' : id ? 'Изменить идею' : 'Новая идея')}
+    <p class="sub">${c.status === 'draft' ? 'Бот заполнил то, что нашёл по ссылке. Проверь и добавь детали.' : 'Обязательно только название — остальное по желанию.'}</p>
+
+    <div class="panel">
+      <label class="field"><span class="lbl">Ссылка</span><div class="row"><input id="link" class="grow" type="url" inputmode="url" placeholder="https://…" value="${esc(f.link)}"><button class="btn small secondary" data-act="preview">Заполнить</button></div>
+        <span class="help">Вставь ссылку и нажми «Заполнить» — название и картинка подтянутся.</span></label>
+      <label class="field"><span class="lbl">Название</span><input id="title" maxlength="140" placeholder="Например, иммерсивный спектакль" value="${esc(f.title)}"></label>
+      <label class="field"><span class="lbl">Почему стоит сходить</span><textarea id="why" maxlength="1500" placeholder="Пара слов: что там интересного">${esc(f.why)}</textarea></label>
+      <div class="field"><span class="lbl">Фото</span><div class="pstrip" id="pstrip"></div><span class="help">До ${MAX_PHOTOS} фото. Первое — обложка. Нажми на фото, чтобы посмотреть.</span></div>
+    </div>
+
+    <div class="section-title">Подробнее</div>
+    <div class="panel">
+      <div class="field"><span class="lbl">Категория</span>${many('tag', Object.entries(DICT.tags), f.tags)}</div>
+      <div class="field"><span class="lbl">Бюджет на человека</span>${one('budget', BUDGET.map((b, i) => [i, b]), f.budget)}</div>
+      <div class="field"><span class="lbl">Сколько займёт</span>${one('duration', Object.entries(DURATION), f.duration)}</div>
+      <label class="field"><span class="lbl">Где</span><input id="area" maxlength="120" placeholder="Район, адрес или метро" value="${esc(f.area)}"></label>
+    </div>
+
+    <div class="section-title">Когда</div>
+    <div class="panel">
+      <div class="field"><span class="lbl">Время суток</span>${many('tod', DICT.blocks.map((b) => [b.key, `${b.label}, ${b.range}`]), f.time_of_day)}<span class="help">Ничего не выбрано — подходит любое время.</span></div>
+      <label class="field"><span class="lbl">Доступно до</span><input type="date" id="available_until" value="${esc(f.available_until || '')}"><span class="help">Для выставок и сезонных мест.</span></label>
+      <label class="field"><span class="lbl">Точная дата и время</span><input type="datetime-local" id="fixed_at" value="${esc(f.fixed_at || '')}"><span class="help">Для концертов и спектаклей с конкретным сеансом.</span></label>
+    </div>
+
+    <div class="panel tight">
       <label class="toggle"><span>На улице<small>Покажем прогноз погоды</small></span><input type="checkbox" class="switch" id="outdoor" ${f.outdoor ? 'checked' : ''}></label>
       <label class="toggle"><span>Нужна бронь или билеты<small>Бот назначит, кто бронирует</small></span><input type="checkbox" class="switch" id="needs_booking" ${f.needs_booking ? 'checked' : ''}></label>
     </div>
-    <label class="field"><span class="label">Доступно до</span><input type="date" id="available_until" value="${esc(f.available_until || '')}">
-      <span class="hint" style="display:block;margin-top:6px">Для выставок и сезонных мест: после этой даты карточка не будет предлагаться.</span></label>
-    <label class="field"><span class="label">Точная дата и время</span><input type="datetime-local" id="fixed_at" value="${esc(f.fixed_at || '')}">
-      <span class="hint" style="display:block;margin-top:6px">Для концертов и спектаклей с конкретным сеансом.</span></label>
-    <div class="stack" style="margin:24px 0 8px">
-      <button class="btn" data-act="save">${c.status === 'draft' ? 'Добавить в идеи' : 'Сохранить'}</button>
-      ${id && isMine ? '<button class="textbtn danger" data-act="del">Удалить</button>' : ''}
-    </div>`,
+
+    ${id && isMine ? '<button class="textbtn danger" data-act="del">Удалить идею</button>' : ''}
+    <div class="actionbar"><button class="btn" data-act="save">${c.status === 'draft' ? 'Добавить в идеи' : 'Сохранить'}</button></div>`,
     {
-      seg: (el) => {
+      one: (el) => {
         f[el.dataset.name] = el.dataset.name === 'budget' ? Number(el.dataset.v) : el.dataset.v;
-        el.parentElement.querySelectorAll('button').forEach((b) => b.classList.toggle('on', b === el));
+        el.parentElement.querySelectorAll('.chip').forEach((b) => b.classList.toggle('on', b === el));
         haptic();
       },
+      pdel: (el) => { f.photos.splice(Number(el.dataset.i), 1); drawStrip(); haptic(); },
+      pcover: (el) => { const [p] = f.photos.splice(Number(el.dataset.i), 1); f.photos.unshift(p); drawStrip(); haptic(); },
       tag: (el) => { const k = el.dataset.k; f.tags.has(k) ? f.tags.delete(k) : f.tags.add(k); el.classList.toggle('on'); haptic(); },
       tod: (el) => { const k = el.dataset.k; f.time_of_day.has(k) ? f.time_of_day.delete(k) : f.time_of_day.add(k); el.classList.toggle('on'); haptic(); },
       preview: (el) => {
@@ -814,17 +945,21 @@ async function renderEditor(id) {
           const w = document.getElementById('why');
           if (p.title && !t.value) t.value = p.title;
           if (p.description && !w.value) w.value = p.description;
-          if (p.image && !f.photo) {
-            f.photo = p.image;
-            document.getElementById('photoInner').innerHTML = photoInner();
+          if (p.image && f.photos.length < MAX_PHOTOS) {
+            f.photos.push(p.image);
+            drawStrip();
           }
           toast(p.title || p.image ? 'Заполнено по ссылке' : 'Сайт не отдал данные — заполни вручную');
         }).finally(() => { el.disabled = false; el.textContent = 'Заполнить'; });
       },
       save: () => act(async () => {
         const v = (k) => document.getElementById(k).value;
+        if (!v('title').trim()) {
+          document.getElementById('title').focus();
+          throw new Error('Добавь название');
+        }
         const body = {
-          title: v('title'), why: v('why'), link: v('link'), area: v('area'), photo: f.photo,
+          title: v('title'), why: v('why'), link: v('link'), area: v('area'), photos: f.photos,
           tags: [...f.tags], time_of_day: [...f.time_of_day], budget: f.budget, duration: f.duration,
           outdoor: document.getElementById('outdoor').checked, needs_booking: document.getElementById('needs_booking').checked,
           available_until: v('available_until') || null, fixed_at: v('fixed_at') || null,
@@ -835,7 +970,7 @@ async function renderEditor(id) {
         location.replace(`#/card/${res.id}`);
       }),
       del: async () => {
-        if (!(await ask('Удалить карточку?'))) return;
+        if (!(await ask('Удалить идею?'))) return;
         act(async () => {
           await api(`/api/cards/${id}`, { method: 'DELETE' });
           location.hash = '#/cards';
@@ -844,42 +979,34 @@ async function renderEditor(id) {
     },
   );
 
-  document.getElementById('photoInput').addEventListener('change', async (e) => {
-    const file = e.target.files[0];
-    if (!file) return;
-    const box = document.getElementById('photoBox');
-    box.style.opacity = '.5';
-    await act(async () => {
-      const { path } = await uploadImage(file);
-      f.photo = path;
-      document.getElementById('photoInner').innerHTML = photoInner();
-    });
-    box.style.opacity = '';
-  });
+  drawStrip();
 }
 
-/* ---------------- воспоминания ---------------- */
+/* ---------------- встречи ---------------- */
 
 async function renderMemories() {
   const { items } = await api('/api/memories');
-  const starsRo = (n) => (n ? `<span style="color:var(--fire)">★</span> ${n.toFixed(1)}` : '');
   view(
-    `${head('Были', 'Наши встречи')}
-    ${items.length ? '' : `<div class="empty">${icon('camera')}<p>Здесь появятся ваши встречи: оценки, фото и впечатления.</p></div>`}
+    `${top('Встречи')}
+    <p class="sub">${items.length ? `${items.length} ${plural(items.length, 'встреча', 'встречи', 'встреч')} вместе` : 'Оценки, фото и впечатления после каждой встречи'}</p>
+    ${items.length ? '' : emptyCard('camera', 'Встреч пока не было', 'После первой встречи здесь можно будет поставить оценку, оставить пару слов и добавить фото.')}
     ${items.map((m) => {
       const mine = m.notes.find((n) => n.user?.id === ME.user.id) || {};
+      const others = m.notes.filter((n) => (n.comment || n.rating) && n.user?.id !== ME.user.id);
       return `<div class="panel mem">
         ${m.card.photo ? `<img class="cover" src="${esc(m.card.photo)}" alt="">` : ''}
-        <h3 style="margin-top:12px">${esc(m.card.title)}</h3>
-        <p class="hint">${esc(m.human)} ${m.avg ? `· ${starsRo(m.avg)}` : ''}</p>
-        ${m.photos.length ? `<div class="gallery">${m.photos.map((p) => `<img src="${esc(p.path)}" alt="" loading="lazy" data-act="open" data-url="${esc(location.origin + p.path)}">`).join('')}</div>` : ''}
-        ${m.notes.filter((n) => (n.comment || n.rating) && n.user?.id !== ME.user.id).map((n) => `<div class="review"><div class="row">${ava(n.user)}<b class="grow">${esc(n.user?.name)}</b>${n.rating ? `<span style="color:var(--fire)">${'★'.repeat(n.rating)}</span>` : ''}</div>${esc(n.comment)}</div>`).join('')}
-        <div class="label" style="margin-top:14px">Твоя оценка</div>
-        <div class="stars" data-round="${m.roundId}" data-rating="${mine.rating || 0}">${[1, 2, 3, 4, 5].map((i) => `<button class="${i <= (mine.rating || 0) ? 'on' : ''}" data-act="star" data-r="${i}" aria-label="${i}">${icon('star')}</button>`).join('')}</div>
-        <textarea id="c-${m.roundId}" placeholder="Что запомнилось?">${esc(mine.comment || '')}</textarea>
-        <div class="row" style="margin-top:10px">
-          <button class="btn small" data-act="saveMem" data-round="${m.roundId}">Сохранить</button>
-          <label class="btn small secondary" style="position:relative">${icon('camera')}Добавить фото<input type="file" accept="image/*" multiple data-round="${m.roundId}" class="memPhoto" style="position:absolute;inset:0;opacity:0"></label>
+        <div class="row"><h3 class="grow">${esc(m.card.title)}</h3>${m.avg ? `<span class="hint"><span style="color:var(--fire)">★</span> ${m.avg.toFixed(1)}</span>` : ''}</div>
+        <p class="hint" style="margin-top:0">${esc(m.human)}</p>
+        ${m.photos.length ? `<div class="gallery" data-photos="${esc(JSON.stringify(m.photos.map((p) => p.path)))}">${m.photos.map((p, i) => `<img src="${esc(p.path)}" alt="" loading="lazy" data-act="lb" data-i="${i}">`).join('')}</div>` : ''}
+        ${others.map((n) => `<div class="review"><div class="row">${ava(n.user)}<b class="grow">${esc(n.user?.name)}</b>${n.rating ? `<span style="color:var(--fire)">${'★'.repeat(n.rating)}</span>` : ''}</div>${esc(n.comment)}</div>`).join('')}
+        <div class="review"><div class="hint">Твоя оценка</div>
+          <div class="stars" data-round="${m.roundId}" data-rating="${mine.rating || 0}">${[1, 2, 3, 4, 5].map((i) => `<button class="${i <= (mine.rating || 0) ? 'on' : ''}" data-act="star" data-r="${i}" aria-label="${i}">${icon('star')}</button>`).join('')}</div>
+          <textarea id="c-${m.roundId}" placeholder="Что запомнилось?">${esc(mine.comment || '')}</textarea>
+          <div class="row" style="margin-top:10px">
+            <label class="btn small secondary" style="position:relative">${icon('camera')}Фото<input type="file" accept="image/*" multiple data-round="${m.roundId}" class="memPhoto" style="position:absolute;inset:0;opacity:0"></label>
+            <span class="grow"></span>
+            <button class="btn small" data-act="saveMem" data-round="${m.roundId}">Сохранить</button>
+          </div>
         </div>
       </div>`;
     }).join('')}`,
@@ -913,37 +1040,43 @@ async function renderMemories() {
 
 async function renderSettings() {
   if (!STATE) STATE = await api('/api/state');
-  let cadence = STATE.cadence;
+  const seg = (act, options, cur) =>
+    `<div class="seg" style="margin:0">${options.map(([k, v]) => `<button class="${cur === k ? 'on' : ''}" data-act="${act}" data-v="${k}">${v}</button>`).join('')}</div>`;
   view(
-    `${head('Настройки', 'Профиль и компания')}
-    <div class="field"><span class="label">Оформление</span>
-      <div class="seg">${THEMES.map(([k, v]) => `<button class="${currentTheme() === k ? 'on' : ''}" data-act="theme" data-v="${k}">${v}</button>`).join('')}</div></div>
-    <label class="field"><span class="label">Как тебя называть</span><input id="name" maxlength="40" value="${esc(ME.user.name)}"></label>
-    <div class="field"><span class="label">Как часто голосуем</span>
-      <div class="seg"><button class="${cadence === 'weekly' ? 'on' : ''}" data-act="cad" data-v="weekly">Каждую неделю</button><button class="${cadence === 'biweekly' ? 'on' : ''}" data-act="cad" data-v="biweekly">Раз в две недели</button></div>
-      <span class="hint" style="display:block;margin-top:6px">Общая настройка для всех. «Раз в две недели» — бот позовёт в субботу, если вы не виделись больше 8 дней.</span></div>
-    <div class="panel"><h3>В компании — ${STATE.members.length}</h3>${people(STATE.members.map((u) => ({ user: u })))}<p class="hint">Чтобы добавить подругу: пусть откроет бота и пришлёт код приглашения.</p></div>
-    <button class="btn" data-act="save">Сохранить</button>
-    <button class="textbtn" data-act="go" data-to="#/intro" style="margin-top:8px">Как это работает</button>`,
+    `${top('Настройки')}
+    <div class="section-title" style="margin-top:12px">Оформление</div>
+    ${seg('theme', THEMES, currentTheme())}
+    <div class="section-title">Профиль</div>
+    <div class="panel"><label class="field"><span class="lbl">Как тебя называть</span><input id="name" maxlength="40" value="${esc(ME.user.name)}"></label></div>
+    <div class="section-title">Как часто голосуем</div>
+    ${seg('cad', [['weekly', 'Каждую неделю'], ['biweekly', 'Раз в две недели']], STATE.cadence)}
+    <p class="hint" style="margin:8px 2px 0">Общая настройка для всех. «Раз в две недели» — бот позовёт в субботу, если вы не виделись больше 8 дней.</p>
+    <div class="section-title">В компании — ${STATE.members.length}</div>
+    <div class="panel"><div class="people" style="margin:0">${STATE.members.map((u) => `<span class="person">${ava(u)}${esc(u.name)}</span>`).join('')}</div>
+      <p class="hint" style="margin:10px 0 0">Чтобы добавить подругу, пусть откроет бота и отправит код приглашения.</p></div>
+    <button class="textbtn" data-act="go" data-to="#/intro" style="margin-top:6px">${icon('info')}Как это работает</button>`,
     {
       theme: (el) => {
         applyTheme(el.dataset.v);
         el.parentElement.querySelectorAll('button').forEach((b) => b.classList.toggle('on', b === el));
         haptic();
       },
-      cad: (el) => {
-        cadence = el.dataset.v;
+      cad: (el) => act(async () => {
+        await api('/api/settings', { method: 'PUT', body: { cadence: el.dataset.v } });
+        STATE.cadence = el.dataset.v;
         el.parentElement.querySelectorAll('button').forEach((b) => b.classList.toggle('on', b === el));
-      },
-      save: () => act(async () => {
-        const name = document.getElementById('name').value.trim();
-        await api('/api/me', { method: 'PUT', body: { name } });
-        await api('/api/settings', { method: 'PUT', body: { cadence } });
-        if (name) ME.user.name = name;
-        success();
-        location.hash = '#/';
+        toast('Сохранено');
       }),
     },
+  );
+  document.getElementById('name').addEventListener('change', (e) =>
+    act(async () => {
+      const name = e.target.value.trim();
+      if (!name) return;
+      await api('/api/me', { method: 'PUT', body: { name } });
+      ME.user.name = name;
+      toast('Имя сохранено');
+    }),
   );
 }
 
@@ -952,21 +1085,26 @@ async function renderSettings() {
 async function init() {
   applyTheme(currentTheme());
   tg?.onEvent?.('themeChanged', syncTelegramColors);
-  tabs.innerHTML = [['#/', 'week', 'shuffle', 'Неделя'], ['#/cards', 'cards', 'bulb', 'Идеи'], ['#/memories', 'memories', 'camera', 'Были']]
+  tabs.innerHTML = [['#/', 'week', 'home', 'Главная'], ['#/cards', 'cards', 'bulb', 'Идеи'], ['#/memories', 'memories', 'camera', 'Встречи']]
     .map(([href, tab, ic, label]) => `<a href="${href}" data-tab="${tab}">${icon(ic)}${label}</a>`)
     .join('');
 
   if (!tg?.initData && !DEV) {
-    app.innerHTML = `<div class="empty">${icon('heart')}<h3>Открой через Telegram</h3><p>Это мини-приложение — запусти его кнопкой «Открыть» в чате с ботом.</p></div>`;
+    app.innerHTML = emptyCard('heart', 'Открой через Telegram', 'Это мини-приложение — запусти его кнопкой «Открыть» в чате с ботом.');
     return;
   }
   try {
     ME = await api('/api/me');
   } catch (e) {
-    app.innerHTML = `<div class="empty"><p>${esc(e.message)}</p></div>`;
+    app.innerHTML = emptyCard('refresh', 'Не получилось загрузить', esc(e.message));
     return;
   }
   DICT = ME.dict;
+  // Ссылки из бота ведут на экран через ?r=… (Telegram занимает #hash своими параметрами)
+  const deep = new URLSearchParams(location.search).get('r');
+  const keep = DEV ? `?dev=${encodeURIComponent(DEV)}` : '';
+  if (deep) history.replaceState(null, '', `${location.pathname}${keep}#/${deep}`);
+  else if (/tgWebApp/.test(location.hash)) history.replaceState(null, '', `${location.pathname}${keep}#/`);
   tg?.BackButton?.onClick(() => (history.length > 1 ? history.back() : (location.hash = '#/')));
   window.addEventListener('hashchange', route);
   document.addEventListener('visibilitychange', () => {

@@ -42,7 +42,8 @@ const names = (users) => users.map((u) => u.name).join(', ');
 
 function keyboard(text, hash = '') {
   if (!pub.url.startsWith('https://')) return undefined;
-  return { inline_keyboard: [[{ text, web_app: { url: `${pub.url}/${hash ? `#/${hash}` : ''}` } }]] };
+  // Путь экрана передаём в query (?r=…): Telegram перезаписывает #hash своими параметрами запуска
+  return { inline_keyboard: [[{ text, web_app: { url: `${pub.url}/${hash ? `?r=${encodeURIComponent(hash)}` : ''}` } }]] };
 }
 
 async function send(userId, html, button) {

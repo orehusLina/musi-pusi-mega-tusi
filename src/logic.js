@@ -38,6 +38,10 @@ export function parseCard(c) {
   return {
     ...c,
     tags: JSON.parse(c.tags),
+    photos: (() => {
+      const list = JSON.parse(c.photos || '[]');
+      return list.length ? list : c.photo ? [c.photo] : [];
+    })(),
     time_of_day: JSON.parse(c.time_of_day),
     outdoor: !!c.outdoor,
     needs_booking: !!c.needs_booking,
